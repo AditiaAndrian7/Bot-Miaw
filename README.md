@@ -15,8 +15,8 @@ Anda dapat melakukan clone repository dengan dua cara:
 
 #### Opsi A - Menggunakan Git Clone
 ```bash
-git clone https://github.com/username/nama-repo.git
-cd nama-repo
+https://github.com/AditiaAndrian7/Bot-Miaw.git
+cd Bot-Miaw
 ```
 
 #### Opsi B - Download ZIP
@@ -115,8 +115,9 @@ Pastikan file `.env` sudah dibuat dan berisi konfigurasi yang benar
 ## 📞 Kontak
 
 Jika ada pertanyaan atau kendala, silakan hubungi:
-- Email: aditiaandrian43.com
+- Email: aditiaandrian43@gmail.com
 - Issue: [GitHub Issues](https://github.com/username/nama-repo/issues)
 
 ---
 **Selamat mencoba!** 🎉
+
