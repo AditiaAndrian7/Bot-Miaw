@@ -84,12 +84,12 @@ client.on("messageCreate", async (message) => {
  - !server
  - !user @mention
 
-🔹 Tools:
+⚙️ Tools:
  - !ppt <topik>
  - !makalah <topik>
  - !critical <topik>
 
-🔹 Tone:
+😲 Tone:
  - !tone lembut
  - !tone tegas
  - !tone pemarah
