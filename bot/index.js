@@ -79,22 +79,22 @@ client.on("messageCreate", async (message) => {
 📜 **BOT MENU**
 
 🔹 Utility:
-!ping
-!info
-!server
-!user @mention
+ - !ping
+ - !info
+ - !server
+ - !user @mention
 
 🔹 Tools:
-!ppt <topik>
-!makalah <topik>
-!critical <topik>
+ - !ppt <topik>
+ - !makalah <topik>
+ - !critical <topik>
 
 🔹 Tone:
-!tone lembut
-!tone tegas
-!tone pemarah
-!tone santai
-!tone default
+ - !tone lembut
+ - !tone tegas
+ - !tone pemarah
+ - !tone santai
+ - !tone default
 `,
         allowedMentions: { repliedUser: false },
       });
