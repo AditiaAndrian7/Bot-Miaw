@@ -27,6 +27,11 @@ function getModel() {
 ================================ */
 async function imageUrlToBase64(url) {
   const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch image");
+  }
+
   const buffer = await response.arrayBuffer();
   return Buffer.from(buffer).toString("base64");
 }
@@ -34,7 +39,7 @@ async function imageUrlToBase64(url) {
 /* ================================
    BUILD PROMPT WITH MEMORY
 ================================ */
-function buildPrompt(userMessage, history = []) {
+function buildPrompt(userMessage, history = [], systemInstruction = "") {
   let historyText = "";
 
   if (history.length) {
@@ -45,7 +50,7 @@ function buildPrompt(userMessage, history = []) {
   }
 
   return `
-${config.personality}
+${systemInstruction || config.personality}
 
 ${historyText}
 User: ${userMessage}
@@ -54,16 +59,30 @@ Bot:
 }
 
 /* ================================
-   GENERATE RESPONSE
+   GENERATE RESPONSE (OBJECT BASED)
 ================================ */
-async function generateResponse(userMessage, imageUrl = null, history = []) {
+async function generateResponse({
+  userMessage,
+  imageUrl = null,
+  history = [],
+  toneInstruction = "",
+  toolInstruction = "",
+}) {
   try {
     const model = getModel();
-    const prompt = buildPrompt(userMessage, history);
+
+    // Gabungkan semua instruction
+    const systemInstruction = `
+${config.personality || ""}
+${toneInstruction || ""}
+${toolInstruction || ""}
+`;
+
+    const prompt = buildPrompt(userMessage, history, systemInstruction);
 
     let result;
 
-    // ================= IMAGE MODE =================
+    /* ================= IMAGE MODE ================= */
     if (imageUrl) {
       const base64Image = await imageUrlToBase64(imageUrl);
 
@@ -76,20 +95,18 @@ async function generateResponse(userMessage, imageUrl = null, history = []) {
           },
         },
       ]);
-    }
-    // ================= TEXT MODE =================
-    else {
+    } else {
+      /* ================= TEXT MODE ================= */
       result = await model.generateContent(prompt);
     }
 
-    const response = result.response;
-    const text = response.text();
+    const text = result.response.text();
 
     return text || "AI tidak memberikan jawaban.";
   } catch (err) {
     const message = err?.message?.toLowerCase() || "";
 
-    // ================= FAILOVER KEY =================
+    /* ================= FAILOVER KEY ================= */
     if (
       (message.includes("429") || message.includes("quota")) &&
       currentKeyIndex < keys.length - 1
@@ -101,7 +118,14 @@ async function generateResponse(userMessage, imageUrl = null, history = []) {
       );
 
       currentKeyIndex++;
-      return generateResponse(userMessage, imageUrl, history);
+
+      return generateResponse({
+        userMessage,
+        imageUrl,
+        history,
+        toneInstruction,
+        toolInstruction,
+      });
     }
 
     console.error("Gemini Error:", err);

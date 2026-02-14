@@ -1,7 +1,10 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits } = require("discord.js");
 
+const config = require("./config");
 const { generateResponse } = require("./services/aiService");
+const { generatePDF } = require("./services/pdfService");
+const { generatePPTX } = require("./services/pptxService");
 const { sendSmartReply } = require("./utils/replyHandler");
 const memoryService = require("./services/memoryService");
 
@@ -14,6 +17,7 @@ const client = new Client({
 });
 
 let botActive = true;
+let userTones = {};
 
 client.once("clientReady", () => {
   console.log(`Logged in as ${client.user.tag}`);
@@ -21,84 +25,258 @@ client.once("clientReady", () => {
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-
-  // =========================
-  // COMMAND CONTROL
-  // =========================
-  if (message.content === "!bot off") {
-    botActive = false;
-    return message.reply({
-      content: "Bot dinonaktifkan.",
-      allowedMentions: { repliedUser: false },
-    });
-  }
-
-  if (message.content === "!bot on") {
-    botActive = true;
-    return message.reply({
-      content: "Bot diaktifkan.",
-      allowedMentions: { repliedUser: false },
-    });
-  }
-
   if (!botActive) return;
 
-  // =========================
-  // MENTION DETECT
-  // =========================
-  if (!message.mentions.has(client.user)) return;
+  const prefix = config.prefix;
 
-  try {
-    const cleaned = message.content
-      .replace(`<@${client.user.id}>`, "")
-      .replace(`<@!${client.user.id}>`, "")
-      .trim();
-
+  // ===== CEK GAMBAR =====
+  let imageUrl = null;
+  if (message.attachments.size > 0) {
     const attachment = message.attachments.first();
-    let imageUrl = null;
-
-    if (attachment && attachment.contentType?.startsWith("image")) {
+    if (attachment.contentType?.startsWith("image")) {
       imageUrl = attachment.url;
     }
+  }
 
-    if (!cleaned && !imageUrl) return;
-
-    await message.channel.sendTyping();
-
-    // =========================
-    // MEMORY GET
-    // =========================
+  /* ======================================
+     PREFIX COMMANDS
+  ====================================== */
+  if (message.content.startsWith(prefix)) {
+    const args = message.content.slice(prefix.length).trim().split(/ +/);
+    const command = args.shift().toLowerCase();
     const userId = message.author.id;
-    const history = memoryService.getMemory(userId);
+    const username = message.author.username;
 
-    const reply = await generateResponse(
-      cleaned || "Jelaskan gambar ini.",
-      imageUrl,
-      history,
-    );
+    /* ===== UTILITY COMMANDS ===== */
+    if (command === "ping") {
+      const sent = await message.channel.send("🏓 Pong...");
+      return sent.edit(
+        `Pong! Latency: ${sent.createdTimestamp - message.createdTimestamp}ms`,
+      );
+    }
 
-    if (!reply) {
+    if (command === "info") {
+      return message.reply(
+        `Saya adalah bot AI versi 1.0, dibuat oleh <@${"1234411792785215528"}>`,
+      );
+    }
+
+    if (command === "server") {
+      return message.reply(
+        `Server ini bernama: ${message.guild.name}, total member: ${message.guild.memberCount}`,
+      );
+    }
+
+    if (command === "user") {
+      const mentioned = message.mentions.users.first() || message.author;
+      return message.reply(`Nama: ${mentioned.username}\nID: ${mentioned.id}`);
+    }
+
+    /* ===== MENU ===== */
+    if (command === "menu") {
       return message.reply({
-        content: "AI tidak memberikan respon.",
+        content: `
+📜 **BOT MENU**
+
+🔹 Utility:
+!ping
+!info
+!server
+!user @mention
+
+🔹 Tools:
+!ppt <topik>
+!makalah <topik>
+!critical <topik>
+
+🔹 Tone:
+!tone lembut
+!tone tegas
+!tone pemarah
+!tone santai
+!tone default
+`,
         allowedMentions: { repliedUser: false },
       });
     }
 
-    // =========================
-    // SAVE MEMORY
-    // =========================
-    memoryService.saveMemory(userId, cleaned, reply);
+    /* ===== TONE ===== */
+    if (command === "tone") {
+      const selected = args[0];
 
-    // =========================
-    // SMART REPLY (split / PDF)
-    // =========================
-    await sendSmartReply(message, reply);
-  } catch (err) {
-    console.error("AI Error:", err);
-    await message.reply({
-      content: "Terjadi error saat memproses AI.",
-      allowedMentions: { repliedUser: false },
-    });
+      if (!selected || selected === "default") {
+        delete userTones[userId];
+        return message.reply("Tone dikembalikan ke default.");
+      }
+
+      if (!config.tones[selected]) {
+        return message.reply("Tone tidak tersedia.");
+      }
+
+      userTones[userId] = selected;
+      return message.reply(`Tone diubah ke: ${selected}`);
+    }
+
+    /* ======================================
+       TOOLS SECTION
+    ====================================== */
+
+    /* ===== PPT ===== */
+    if (command === "ppt") {
+      const topic = args.join(" ");
+      if (!topic) return message.reply("Masukkan topik PPT.");
+
+      await message.channel.sendTyping();
+
+      const aiRaw = await generateResponse({
+        userMessage: `Buat presentasi tentang "${topic}".
+
+Output WAJIB dalam format JSON valid:
+
+{
+  "title": "Judul Presentasi",
+  "author": "${username}",
+  "slides": [
+    {
+      "title": "Judul Slide",
+      "points": ["Bullet 1", "Bullet 2"]
+    }
+  ]
+}
+
+Aturan:
+- Maksimal 5 bullet per slide
+- Bullet singkat
+- Tidak boleh teks di luar JSON`,
+        toneInstruction: userTones[userId]
+          ? config.tones[userTones[userId]]
+          : "",
+        toolInstruction: config.tools.ppt,
+        imageUrl, // Kirim URL gambar ke AI jika ada
+      });
+
+      let parsed;
+      try {
+        const jsonMatch = aiRaw.match(/```json([\s\S]*?)```/);
+        const cleanJson = jsonMatch ? jsonMatch[1].trim() : aiRaw.trim();
+        parsed = JSON.parse(cleanJson);
+      } catch (err) {
+        console.log("AI RAW OUTPUT:\n", aiRaw);
+        return message.reply("AI gagal menghasilkan format PPT yang valid.");
+      }
+
+      const filePath = await generatePPTX({
+        data: parsed,
+        userId,
+      });
+
+      return message.reply({
+        content: "PPT berhasil dibuat:",
+        files: [filePath],
+      });
+    }
+
+    /* ===== MAKALAH ===== */
+    if (command === "makalah") {
+      const topic = args.join(" ");
+      if (!topic) return message.reply("Masukkan topik makalah.");
+
+      await message.channel.sendTyping();
+
+      const aiText = await generateResponse({
+        userMessage: `Buat makalah lengkap tentang "${topic}" dengan struktur:
+
+BAB I PENDAHULUAN
+1.1 Latar Belakang
+1.2 Rumusan Masalah
+1.3 Tujuan
+
+BAB II PEMBAHASAN
+
+BAB III PENUTUP
+3.1 Kesimpulan
+3.2 Saran
+
+DAFTAR PUSTAKA
+
+Gunakan bahasa formal akademik.`,
+        toneInstruction: userTones[userId]
+          ? config.tones[userTones[userId]]
+          : "",
+        toolInstruction: config.tools.makalah,
+        imageUrl, // Kirim gambar ke AI jika ada
+      });
+
+      const filePath = await generatePDF({
+        text: aiText,
+        username,
+        userId,
+        title: `Makalah tentang ${topic}`,
+      });
+
+      return message.reply({
+        content: "Makalah berhasil dibuat:",
+        files: [filePath],
+      });
+    }
+
+    /* ===== CRITICAL ===== */
+    if (command === "critical") {
+      const topic = args.join(" ");
+      if (!topic) return message.reply("Masukkan topik.");
+
+      await message.channel.sendTyping();
+
+      const reply = await generateResponse({
+        userMessage: topic,
+        toneInstruction: userTones[userId]
+          ? config.tones[userTones[userId]]
+          : "",
+        toolInstruction: config.tools.critical,
+        imageUrl, // Kirim gambar ke AI jika ada
+      });
+
+      return sendSmartReply(message, reply);
+    }
+
+    return;
+  }
+
+  /* ======================================
+     MENTION MODE
+  ====================================== */
+  if (message.mentions.has(client.user)) {
+    try {
+      const cleaned = message.content
+        .replace(`<@${client.user.id}>`, "")
+        .replace(`<@!${client.user.id}>`, "")
+        .trim();
+      if (!cleaned) return;
+
+      await message.channel.sendTyping();
+
+      const userId = message.author.id;
+      const history = memoryService.getMemory(userId);
+      const toneInstruction = userTones[userId]
+        ? config.tones[userTones[userId]]
+        : "";
+
+      const reply = await generateResponse({
+        userMessage: cleaned,
+        history,
+        toneInstruction,
+        imageUrl, // Kirim gambar ke AI jika ada
+      });
+
+      memoryService.saveMemory(userId, cleaned, reply);
+      await sendSmartReply(message, reply);
+    } catch (err) {
+      console.error("AI Error:", err);
+      await message.reply({
+        content: "Terjadi error saat memproses AI.",
+        allowedMentions: { repliedUser: false },
+      });
+    }
   }
 });
 
