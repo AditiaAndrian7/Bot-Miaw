@@ -57,7 +57,7 @@ client.on("messageCreate", async (message) => {
 
     if (command === "info") {
       return message.reply(
-        `Saya adalah bot AI versi 1.0, dibuat oleh <@${"1234411792785215528"}>`,
+        `Saya adalah bot Miaw versi 1.0, dibuat oleh <@${"1234411792785215528"}>`,
       );
     }
 
