@@ -78,18 +78,18 @@ client.on("messageCreate", async (message) => {
         content: `
 📜 **BOT MENU**
 
-🔹 Utility:
+⚙️ Utility:
  - !ping
  - !info
  - !server
  - !user @mention
 
-⚙️ Tools:
+ ⚒️ Tools:
  - !ppt <topik>
  - !makalah <topik>
  - !critical <topik>
 
-😲 Tone:
+🎭  Tone:
  - !tone lembut
  - !tone tegas
  - !tone pemarah
