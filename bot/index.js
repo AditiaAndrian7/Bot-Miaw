@@ -13,6 +13,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates,
   ],
 });
 
@@ -78,23 +79,23 @@ client.on("messageCreate", async (message) => {
         content: `
 📜 **BOT MENU**
 
-⚙️ Utility:
- - !ping
- - !info
- - !server
- - !user @mention
+🔹 Utility:
+!ping
+!info
+!server
+!user @mention
 
- ⚒️ Tools:
- - !ppt <topik>
- - !makalah <topik>
- - !critical <topik>
+🔹 Tools:
+!ppt <topik>
+!makalah <topik>
+!critical <topik>
 
-🎭  Tone:
- - !tone lembut
- - !tone tegas
- - !tone pemarah
- - !tone santai
- - !tone default
+🔹 Tone:
+!tone lembut
+!tone tegas
+!tone pemarah
+!tone santai
+!tone default
 `,
         allowedMentions: { repliedUser: false },
       });
@@ -117,8 +118,74 @@ client.on("messageCreate", async (message) => {
       return message.reply(`Tone diubah ke: ${selected}`);
     }
 
+    /* ===== MUSIC ===== */
+    if (command === "music") {
+      const subCommand = args[0]?.toLowerCase();
+      const keyword = args.slice(1).join(" ");
+      const userId = message.author.id;
+
+      const musicService = require("./services/musicService");
+
+      try {
+        switch (subCommand) {
+          case "play":
+            if (!keyword)
+              return message.reply("Masukkan lagu yang ingin diputar!");
+
+            const currentQueue = musicService.getQueue(message.guild.id);
+            const wasEmpty = currentQueue.length === 0;
+
+            const songTitle = await musicService.playSong(
+              message.guild,
+              message.member,
+              keyword,
+            );
+
+            if (wasEmpty) {
+              return message.reply(`🎶 **Memulai lagu:** ${songTitle}`);
+            } else {
+              return message.reply(
+                `📥 **Menambahkan ke antrian:** ${songTitle}`,
+              );
+            }
+
+          case "pause":
+            musicService.pause(message.guild.id);
+            return message.reply("⏸️ Musik dijeda.");
+
+          case "resume":
+            musicService.resume(message.guild.id);
+            return message.reply("▶️ Musik dilanjutkan.");
+
+          case "stop":
+            musicService.stop(message.guild.id);
+            return message.reply("⏹️ Musik dihentikan.");
+
+          case "skip":
+            musicService.skip(message.guild.id);
+            return message.reply("⏭️ Lagu dilewati.");
+
+          case "queue":
+            const queueList = musicService.getQueue(message.guild.id);
+            if (!queueList.length) return message.reply("Antrian kosong.");
+            return message.reply(
+              "🎵 **Antrian saat ini:**\n" +
+                queueList.map((s, i) => `${i + 1}. ${s.title}`).join("\n"),
+            );
+
+          default:
+            return message.reply(
+              "Gunakan: `!music play [judul]`, `pause`, `resume`, `stop`, `skip`, `queue`",
+            );
+        }
+      } catch (err) {
+        console.error("Music Error:", err);
+        return message.reply(`Terjadi error: ${err.message}`);
+      }
+    }
+
     /* ======================================
-       TOOLS SECTION
+      TOOLS SECTION
     ====================================== */
 
     /* ===== PPT ===== */
@@ -152,7 +219,7 @@ Aturan:
           ? config.tones[userTones[userId]]
           : "",
         toolInstruction: config.tools.ppt,
-        imageUrl, // Kirim URL gambar ke AI jika ada
+        imageUrl,
       });
 
       let parsed;
@@ -176,7 +243,6 @@ Aturan:
       });
     }
 
-    /* ===== MAKALAH ===== */
     if (command === "makalah") {
       const topic = args.join(" ");
       if (!topic) return message.reply("Masukkan topik makalah.");
