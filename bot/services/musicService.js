@@ -9,11 +9,25 @@ const {
 } = require("@discordjs/voice");
 
 const play = require("play-dl");
-const ytDlp = require("yt-dlp-exec");
 const pathToFfmpeg = require("ffmpeg-static");
+const { exec } = require("child_process");
+const util = require("util");
+const execPromise = util.promisify(exec);
+const fs = require("fs");
+const path = require("path");
 
 // Beri tahu @discordjs/voice lokasi FFmpeg
 process.env.FFMPEG_PATH = pathToFfmpeg;
+
+// Path ke binary yt-dlp (otomatis menyesuaikan OS)
+// Dari services (bot/services) naik 2 level ke root, lalu masuk folder bin
+const YT_DLP_PATH = path.join(
+  __dirname,
+  "..",
+  "..",
+  "bin",
+  process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp",
+);
 
 // Map untuk menyimpan antrian per guild
 const guildQueues = new Map();
@@ -110,7 +124,7 @@ async function playSong(guild, member, keyword) {
 }
 
 /* ============================= */
-/* PLAY NEXT (dengan prioritas yt-dlp) */
+/* PLAY NEXT (dengan prioritas yt-dlp binary) */
 /* ============================= */
 async function playNext(guildId) {
   const queue = guildQueues.get(guildId);
@@ -139,50 +153,56 @@ async function playNext(guildId) {
     console.log("DEBUG START");
     console.log("Song URL:", videoUrl);
 
-    // ===== METODE UTAMA: yt-dlp =====
-    try {
-      // Dapatkan URL audio langsung dari yt-dlp
-      const audioUrl = await ytDlp(videoUrl, {
-        format: "bestaudio",
-        getUrl: true, // Mengembalikan URL saja, tidak mengunduh file
-      });
+    // ===== METODE UTAMA: yt-dlp binary =====
+    if (fs.existsSync(YT_DLP_PATH)) {
+      try {
+        console.log("📁 Menggunakan yt-dlp binary di:", YT_DLP_PATH);
 
-      console.log("✅ yt-dlp URL obtained");
+        const { stdout } = await execPromise(
+          `"${YT_DLP_PATH}" -f bestaudio --get-url "${videoUrl}"`,
+        );
+        const audioUrl = stdout.trim();
 
-      // Fetch URL dengan header yang meniru browser
-      const response = await fetch(audioUrl, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Accept: "*/*",
-          Connection: "keep-alive",
-          Referer: "https://www.youtube.com/",
-        },
-      });
+        console.log("✅ yt-dlp URL obtained");
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Fetch URL dengan header yang meniru browser
+        const response = await fetch(audioUrl, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            Accept: "*/*",
+            Connection: "keep-alive",
+            Referer: "https://www.youtube.com/",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        // Buat resource audio dengan inputType 'arbitrary' agar FFmpeg menangani konversi
+        const resource = createAudioResource(response.body, {
+          inputType: "arbitrary",
+        });
+
+        resource.playStream.on("error", (err) => {
+          console.error("❌ Resource stream error (yt-dlp):", err);
+        });
+
+        queue.player.play(resource);
+        console.log("✅ Playing using yt-dlp binary + fetch");
+        console.log("=================================");
+        return; // Berhasil, keluar
+      } catch (ytDlpErr) {
+        console.log("⚠️ yt-dlp binary failed:", ytDlpErr.message);
+        // Lanjut ke metode cadangan
       }
-
-      // Buat resource audio dengan inputType 'arbitrary' agar FFmpeg menangani konversi
-      const resource = createAudioResource(response.body, {
-        inputType: "arbitrary",
-      });
-
-      resource.playStream.on("error", (err) => {
-        console.error("❌ Resource stream error (yt-dlp):", err);
-      });
-
-      queue.player.play(resource);
-      console.log("✅ Playing using yt-dlp + fetch");
-      console.log("=================================");
-      return; // Berhasil, keluar
-    } catch (ytDlpErr) {
-      console.log("⚠️ yt-dlp failed:", ytDlpErr.message);
-      // Lanjut ke metode cadangan
+    } else {
+      console.log("⚠️ yt-dlp binary tidak ditemukan di:", YT_DLP_PATH);
     }
 
     // ===== METODE CADANGAN: play-dl video_info + fetch =====
+    console.log("📁 Menggunakan fallback play-dl...");
     const info = await play.video_info(videoUrl);
     console.log("✅ video_info OK");
     console.log("Video title:", info.video_details?.title);
