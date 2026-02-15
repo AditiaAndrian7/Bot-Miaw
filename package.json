@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "preinstall": "apt-get update && apt-get install -y python3 python3-pip ffmpeg libatomic1 && ln -sf /usr/bin/python3 /usr/bin/python",
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node bot/index.js"
   },
