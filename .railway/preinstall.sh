@@ -1,3 +1,4 @@
 #!/bin/bash
 apt-get update
-apt-get install -y python3 python3-pip ffmpeg
+apt-get install -y python3 python3-pip ffmpeg libatomic1
+ln -sf /usr/bin/python3 /usr/bin/python
