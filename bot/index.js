@@ -77,26 +77,37 @@ client.on("messageCreate", async (message) => {
     if (command === "menu") {
       return message.reply({
         content: `
-📜 **BOT MENU**
+\`\`\`
+📜 BOT MENU
 
-🔹 Utility:
-!ping
-!info
-!server
-!user @mention
+⚙️ Utility
+- !ping
+- !info
+- !server
+- !user @mention
 
-🔹 Tools:
-!ppt <topik>
-!makalah <topik>
-!critical <topik>
+⚒️ Tools
+- !ppt <topik>
+- !makalah <topik>
+- !critical <topik>
 
-🔹 Tone:
-!tone lembut
-!tone tegas
-!tone pemarah
-!tone santai
-!tone default
-`,
+🎶 Music
+- !music play <judul>
+- !music pause
+- !music resume
+- !music skip
+- !music stop
+- !music queue
+
+🎭 Tone
+- !tone lembut
+- !tone tegas
+- !tone pemarah
+- !tone santai
+- !tone default
+\`\`\`
+`
+,
         allowedMentions: { repliedUser: false },
       });
     }
