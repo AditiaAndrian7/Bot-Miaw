@@ -1,3 +1,6 @@
 {
-  "apt": ["python3", "python3-pip", "ffmpeg"]
+  "apt_packages": ["python3", "python3-pip", "ffmpeg"],
+  "node_version": "22",
+  "build_steps": ["npm ci"],
+  "start": "npm run start"
 }
