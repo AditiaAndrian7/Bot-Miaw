@@ -29,6 +29,41 @@ const YT_DLP_PATH = path.join(
   process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp",
 );
 
+// Fungsi untuk memastikan binary bisa dieksekusi
+async function ensureBinaryExecutable() {
+  if (!fs.existsSync(YT_DLP_PATH)) {
+    console.log("⚠️ Binary tidak ditemukan di:", YT_DLP_PATH);
+    return false;
+  }
+
+  try {
+    // Coba jalankan --version untuk test
+    await execPromise(`"${YT_DLP_PATH}" --version`);
+    console.log("✅ Binary sudah bisa dieksekusi");
+    return true;
+  } catch (err) {
+    console.log("⚠️ Mencoba memberi izin eksekusi...");
+    try {
+      // Untuk Linux/Railway (chmod)
+      if (process.platform !== "win32") {
+        await execPromise(`chmod +x "${YT_DLP_PATH}"`);
+        console.log("✅ Izin eksekusi diberikan");
+
+        // Verifikasi lagi
+        await execPromise(`"${YT_DLP_PATH}" --version`);
+        return true;
+      } else {
+        // Di Windows tidak perlu chmod
+        console.log("⚠️ Di Windows, cek manual apakah file bisa dijalankan");
+        return false;
+      }
+    } catch (chmodErr) {
+      console.error("❌ Gagal memberi izin:", chmodErr.message);
+      return false;
+    }
+  }
+}
+
 // Map untuk menyimpan antrian per guild
 const guildQueues = new Map();
 
@@ -155,47 +190,54 @@ async function playNext(guildId) {
 
     // ===== METODE UTAMA: yt-dlp binary =====
     if (fs.existsSync(YT_DLP_PATH)) {
-      try {
-        console.log("📁 Menggunakan yt-dlp binary di:", YT_DLP_PATH);
+      // Pastikan binary bisa dieksekusi
+      const isExecutable = await ensureBinaryExecutable();
 
-        const { stdout } = await execPromise(
-          `"${YT_DLP_PATH}" -f bestaudio --get-url "${videoUrl}"`,
-        );
-        const audioUrl = stdout.trim();
+      if (isExecutable) {
+        try {
+          console.log("📁 Menggunakan yt-dlp binary di:", YT_DLP_PATH);
 
-        console.log("✅ yt-dlp URL obtained");
+          const { stdout } = await execPromise(
+            `"${YT_DLP_PATH}" -f bestaudio --get-url "${videoUrl}"`,
+          );
+          const audioUrl = stdout.trim();
 
-        // Fetch URL dengan header yang meniru browser
-        const response = await fetch(audioUrl, {
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            Accept: "*/*",
-            Connection: "keep-alive",
-            Referer: "https://www.youtube.com/",
-          },
-        });
+          console.log("✅ yt-dlp URL obtained");
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          // Fetch URL dengan header yang meniru browser
+          const response = await fetch(audioUrl, {
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              Accept: "*/*",
+              Connection: "keep-alive",
+              Referer: "https://www.youtube.com/",
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          // Buat resource audio dengan inputType 'arbitrary' agar FFmpeg menangani konversi
+          const resource = createAudioResource(response.body, {
+            inputType: "arbitrary",
+          });
+
+          resource.playStream.on("error", (err) => {
+            console.error("❌ Resource stream error (yt-dlp):", err);
+          });
+
+          queue.player.play(resource);
+          console.log("✅ Playing using yt-dlp binary + fetch");
+          console.log("=================================");
+          return; // Berhasil, keluar
+        } catch (ytDlpErr) {
+          console.log("⚠️ yt-dlp binary failed:", ytDlpErr.message);
+          // Lanjut ke metode cadangan
         }
-
-        // Buat resource audio dengan inputType 'arbitrary' agar FFmpeg menangani konversi
-        const resource = createAudioResource(response.body, {
-          inputType: "arbitrary",
-        });
-
-        resource.playStream.on("error", (err) => {
-          console.error("❌ Resource stream error (yt-dlp):", err);
-        });
-
-        queue.player.play(resource);
-        console.log("✅ Playing using yt-dlp binary + fetch");
-        console.log("=================================");
-        return; // Berhasil, keluar
-      } catch (ytDlpErr) {
-        console.log("⚠️ yt-dlp binary failed:", ytDlpErr.message);
-        // Lanjut ke metode cadangan
+      } else {
+        console.log("⚠️ Binary tidak bisa dieksekusi, lanjut fallback");
       }
     } else {
       console.log("⚠️ yt-dlp binary tidak ditemukan di:", YT_DLP_PATH);
