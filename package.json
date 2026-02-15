@@ -4,7 +4,6 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "preinstall": "apt-get update && apt-get install -y python3 python3-pip ffmpeg libatomic1 && ln -sf /usr/bin/python3 /usr/bin/python",
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node bot/index.js"
   },
@@ -22,7 +21,6 @@
     "ffmpeg-static": "^5.3.0",
     "pdfkit": "^0.17.2",
     "play-dl": "^1.9.7",
-    "pptxgenjs": "^4.0.1",
-    "yt-dlp-exec": "^1.0.2"
+    "pptxgenjs": "^4.0.1"
   }
 }
