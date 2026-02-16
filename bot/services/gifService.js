@@ -4,26 +4,6 @@ const path = require("path");
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
-// REGISTER FONT LOKAL!
-const fontPath = path.join(__dirname, "../fonts");
-try {
-  if (fs.existsSync(path.join(fontPath, "Poppins-Regular.ttf"))) {
-    registerFont(path.join(fontPath, "Poppins-Regular.ttf"), {
-      family: "Poppins",
-    });
-    registerFont(path.join(fontPath, "Poppins-Bold.ttf"), {
-      family: "Poppins",
-      weight: "bold",
-    });
-    console.log("✅ Font Poppins registered from local file");
-  } else {
-    console.warn("⚠️ Font files not found, using system fallback");
-  }
-} catch (err) {
-  console.warn("⚠️ Font registration failed:", err.message);
-}
-
-// Import ffmpeg
 let ffmpeg, ffmpegStatic;
 try {
   ffmpeg = require("fluent-ffmpeg");
@@ -40,34 +20,77 @@ try {
 const TEMP_DIR = path.join(__dirname, "../temp");
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
-const WIDTH = 600;
-const HEIGHT = 300;
+const WIDTH = 400;
+const HEIGHT = 200;
 
 const LAYOUT = {
-  avatar: { x: 40, y: HEIGHT / 2 - 60, size: 120 },
-  title: { x: 180, y: HEIGHT / 2 - 45, fontSize: 36 },
-  username: { x: 180, y: HEIGHT / 2, fontSize: 28 },
-  subtitle: { x: 180, y: HEIGHT / 2 + 45, fontSize: 22 },
+  avatar: { x: 30, y: HEIGHT / 2 - 40, size: 80 },
+  title: { x: 120, y: HEIGHT / 2 - 30, fontSize: 24 },
+  username: { x: 120, y: HEIGHT / 2, fontSize: 18 },
+  subtitle: { x: 120, y: HEIGHT / 2 + 30, fontSize: 14 },
 };
 
+// ============================================
+// FONT HANDLING DENGAN MULTIPLE FALLBACK
+// ============================================
+let fontRegistered = false;
+
+try {
+  const fontDir = path.join(__dirname, "../fonts");
+  const regularPath = path.join(fontDir, "Poppins-Regular.ttf");
+  const boldPath = path.join(fontDir, "Poppins-Bold.ttf");
+
+  if (fs.existsSync(regularPath) && fs.existsSync(boldPath)) {
+    registerFont(regularPath, { family: "Poppins" });
+    registerFont(boldPath, { family: "Poppins", weight: "bold" });
+    console.log("✅ Poppins fonts registered successfully");
+    fontRegistered = true;
+  } else {
+    console.warn("⚠️ Font files not found");
+  }
+} catch (err) {
+  console.warn("⚠️ Font registration failed:", err.message);
+}
+
+// FUNGSI RENDER TEXT DENGAN FALLBACK BERTINGKAT
 function renderText(ctx, text, x, y, fontSize, isBold = false) {
   ctx.save();
 
-  // PAKE FONT YANG SUDAH DIREGISTER
-  if (isBold) {
-    ctx.font = `bold ${fontSize}px "Poppins", "sans-serif"`;
-  } else {
-    ctx.font = `${fontSize}px "Poppins", "sans-serif"`;
+  // Coba pake Poppins kalau berhasil register
+  if (fontRegistered) {
+    try {
+      ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px "Poppins"`;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText("test", 0, 0); // Test render
+    } catch (e) {
+      fontRegistered = false; // Gagal, fallback
+    }
   }
 
-  // Stroke hitam
-  ctx.strokeStyle = "#000000";
-  ctx.lineWidth = fontSize / 6;
-  ctx.strokeText(text, x, y);
+  // Fallback: sans-serif dengan stroke tebal
+  if (!fontRegistered) {
+    // Stroke hitam sangat tebal
+    ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px "sans-serif"`;
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = fontSize / 3; // Stroke lebih tebal
+    ctx.strokeText(text, x, y);
 
-  // Fill putih
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText(text, x, y);
+    // Stroke putih medium
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = fontSize / 6;
+    ctx.strokeText(text, x, y);
+
+    // Fill putih
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(text, x, y);
+  } else {
+    // Poppins version
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = fontSize / 5;
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(text, x, y);
+  }
 
   ctx.restore();
 }
@@ -87,6 +110,7 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     if (!response.ok)
       throw new Error(`Gagal download GIF: ${response.statusText}`);
     const buffer = await response.arrayBuffer();
+
     fs.writeFileSync(tempBgPath, Buffer.from(buffer));
     console.log(`✅ Background downloaded (${buffer.byteLength} bytes)`);
 
@@ -94,11 +118,12 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
 
+    // Background transparan
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
     // Gambar avatar
     const avatar = await loadImage(
-      member.user.displayAvatarURL({ extension: "png", size: 128 }),
+      member.user.displayAvatarURL({ extension: "png", size: 64 }),
     );
 
     // Avatar bulat
@@ -122,7 +147,7 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     );
     ctx.restore();
 
-    // Stroke avatar
+    // Stroke putih di avatar
     ctx.save();
     ctx.beginPath();
     ctx.arc(
@@ -133,17 +158,17 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
       Math.PI * 2,
     );
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;
     ctx.stroke();
     ctx.restore();
 
-    // RENDER TEXT DENGAN FONT SENDIRI
+    // RENDER TEXT
     renderText(
       ctx,
       type.toUpperCase(),
       LAYOUT.title.x,
       LAYOUT.title.y,
-      36,
+      24,
       true,
     );
     renderText(
@@ -151,25 +176,19 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
       member.user.username,
       LAYOUT.username.x,
       LAYOUT.username.y,
-      28,
+      18,
     );
 
     if (type === "welcome" || type === "goodbye") {
       renderText(
         ctx,
-        `Server: ${member.guild.name}`,
+        member.guild.name,
         LAYOUT.subtitle.x,
         LAYOUT.subtitle.y,
-        22,
+        14,
       );
     } else if (type === "congrats" && extra.roleName) {
-      renderText(
-        ctx,
-        `Role baru: ${extra.roleName}`,
-        LAYOUT.subtitle.x,
-        LAYOUT.subtitle.y,
-        22,
-      );
+      renderText(ctx, extra.roleName, LAYOUT.subtitle.x, LAYOUT.subtitle.y, 14);
     }
 
     const overlayBuffer = canvas.toBuffer("image/png");
@@ -180,17 +199,13 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     await new Promise((resolve, reject) => {
       ffmpeg(tempBgPath)
         .input(tempOverlayPath)
-        .complexFilter([
-          "[0:v] scale=600:300:flags=lanczos [bg]",
-          "[bg][1:v] overlay=0:0:format=auto,format=rgb24 [out]",
-        ])
         .outputOptions([
-          "-map [out]",
-          "-pix_fmt rgb24",
-          "-r 15",
-          "-loop 0",
-          "-preset ultrafast",
-          "-gifflags -offsetting",
+          "-vf",
+          "scale=400:200:flags=lanczos",
+          "-r",
+          "10",
+          "-loop",
+          "0",
         ])
         .on("end", resolve)
         .on("error", reject)
