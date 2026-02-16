@@ -1,4 +1,4 @@
-const { createCanvas, loadImage } = require("@napi-rs/canvas");
+const { createCanvas, loadImage } = require("canvas");
 const { generateGifWithFFmpeg } = require("../services/gifService");
 const { parseGIF, decompressFrames } = require("gifuct-js");
 

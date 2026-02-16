@@ -1,4 +1,4 @@
-const { createCanvas, loadImage } = require("@napi-rs/canvas");
+const { createCanvas, loadImage } = require("canvas"); // GANTI INI!
 const fs = require("fs");
 const path = require("path");
 const fetch = (...args) =>
@@ -32,29 +32,27 @@ const LAYOUT = {
   subtitle: { x: 180, y: HEIGHT / 2 + 45, fontSize: 22 },
 };
 
-// FUNGSI RENDER TEKS DENGAN DUPLICATE (PASTI KELIATAN)
+// FUNGSI RENDER TEKS YANG LEBIH ROBUST
 function renderText(ctx, text, x, y, fontSize, isBold = false) {
   ctx.save();
 
-  // Set font - pake font default canvas yang pasti ada
-  ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px "sans-serif"`;
+  // Set font dengan fallback lengkap
+  ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px "Arial", "Helvetica", "sans-serif"`;
 
-  // Shadow biar kebaca
-  ctx.shadowColor = "black";
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetX = 3;
-  ctx.shadowOffsetY = 3;
+  // Stroke hitam dulu (biar kebaca di background apapun)
+  ctx.strokeStyle = "#000000";
+  ctx.lineWidth = fontSize / 6;
+  ctx.strokeText(text, x, y);
 
-  // Fill putih
+  // Fill putih di atasnya
   ctx.fillStyle = "#ffffff";
   ctx.fillText(text, x, y);
 
-  // Reset shadow sedikit untuk outline kedua
+  // Tambah shadow tipis
+  ctx.shadowColor = "rgba(0,0,0,0.5)";
   ctx.shadowBlur = 5;
-  ctx.shadowOffsetX = 1;
-  ctx.shadowOffsetY = 1;
-
-  // Fill lagi biar lebih tebal
+  ctx.shadowOffsetX = 2;
+  ctx.shadowOffsetY = 2;
   ctx.fillText(text, x, y);
 
   ctx.restore();
@@ -127,7 +125,7 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     ctx.stroke();
     ctx.restore();
 
-    // RENDER TEXT PAKE FUNGSI BARU
+    // RENDER TEXT
     renderText(
       ctx,
       type.toUpperCase(),
@@ -164,12 +162,6 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
 
     // Simpan overlay
     const overlayBuffer = canvas.toBuffer("image/png");
-
-    // DEBUG: Simpan overlay buat dicek
-    const debugPath = path.join(TEMP_DIR, `debug_${Date.now()}.png`);
-    fs.writeFileSync(debugPath, overlayBuffer);
-    console.log(`🔍 Debug overlay saved: ${debugPath}`);
-
     fs.writeFileSync(tempOverlayPath, overlayBuffer);
     console.log(`✅ Overlay created`);
 
@@ -200,7 +192,6 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
 
     return resultBuffer;
   } finally {
-    // Hapus file temporary (kecuali debug)
     [tempBgPath, tempOverlayPath, outputPath].forEach((f) => {
       if (fs.existsSync(f)) {
         try {
