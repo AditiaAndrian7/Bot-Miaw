@@ -1,4 +1,4 @@
-const { createCanvas, loadImage } = require("canvas"); // GANTI INI!
+const { createCanvas, loadImage } = require("canvas");
 const fs = require("fs");
 const path = require("path");
 const fetch = (...args) =>
@@ -24,7 +24,6 @@ if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 const WIDTH = 600;
 const HEIGHT = 300;
 
-// LAYOUT
 const LAYOUT = {
   avatar: { x: 40, y: HEIGHT / 2 - 60, size: 120 },
   title: { x: 180, y: HEIGHT / 2 - 45, fontSize: 36 },
@@ -32,28 +31,25 @@ const LAYOUT = {
   subtitle: { x: 180, y: HEIGHT / 2 + 45, fontSize: 22 },
 };
 
-// FUNGSI RENDER TEKS YANG LEBIH ROBUST
+// FUNGSI RENDER TEKS DENGAN FONT GENERIC
 function renderText(ctx, text, x, y, fontSize, isBold = false) {
   ctx.save();
 
-  // Set font dengan fallback lengkap
-  ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px "Arial", "Helvetica", "sans-serif"`;
+  // Gunakan font generic yang PASTI ADA di semua sistem
+  // 'sans-serif' akan pake font default sistem
+  ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px sans-serif`;
 
-  // Stroke hitam dulu (biar kebaca di background apapun)
+  // Stroke hitam TEBAL
   ctx.strokeStyle = "#000000";
-  ctx.lineWidth = fontSize / 6;
+  ctx.lineWidth = fontSize / 5; // Lebih tebal
   ctx.strokeText(text, x, y);
 
-  // Fill putih di atasnya
+  // Fill putih
   ctx.fillStyle = "#ffffff";
   ctx.fillText(text, x, y);
 
-  // Tambah shadow tipis
-  ctx.shadowColor = "rgba(0,0,0,0.5)";
-  ctx.shadowBlur = 5;
-  ctx.shadowOffsetX = 2;
-  ctx.shadowOffsetY = 2;
-  ctx.fillText(text, x, y);
+  // Tambah stroke lagi biar makin jelas
+  ctx.strokeText(text, x, y);
 
   ctx.restore();
 }
@@ -76,7 +72,6 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     fs.writeFileSync(tempBgPath, Buffer.from(buffer));
     console.log(`✅ Background downloaded (${buffer.byteLength} bytes)`);
 
-    // 2. Buat overlay dengan canvas
     console.log(`🎨 Creating overlay...`);
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
@@ -165,7 +160,6 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     fs.writeFileSync(tempOverlayPath, overlayBuffer);
     console.log(`✅ Overlay created`);
 
-    // 3. Proses dengan FFmpeg
     console.log(`🎬 Processing GIF with FFmpeg...`);
     await new Promise((resolve, reject) => {
       ffmpeg(tempBgPath)
