@@ -129,7 +129,7 @@ ${toolInstruction || ""}
     }
 
     console.error("Gemini Error:", err);
-    return "Ada error internal dari AI.";
+    return "Apikey Limit.";
   }
 }
 

@@ -7,6 +7,7 @@ const { generatePDF } = require("./services/pdfService");
 const { generatePPTX } = require("./services/pptxService");
 const { sendSmartReply } = require("./utils/replyHandler");
 const memoryService = require("./services/memoryService");
+const MemberService = require("./services/memberService");
 
 const client = new Client({
   intents: [
@@ -14,11 +15,27 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
 let botActive = true;
 let userTones = {};
+
+// ===============================
+// MEMBER SERVICE (WELCOME SYSTEM)
+// ===============================
+const memberService = new MemberService(client, {
+  welcomeChannelId: "1427864713999679489",
+  autoRoleName: "Member",
+
+  welcomeBackground:
+    "https://i.pinimg.com/originals/2f/24/61/2f24616bd3e4805e20b6a91cb3b6dbe4.gif",
+  goodbyeBackground:
+    "https://i.pinimg.com/originals/00/9b/aa/009baaa4b96631d3d90740aac3b8947a.gif",
+  congratsBackground:
+    "https://i.pinimg.com/originals/2b/6e/e1/2b6ee1af25e9b5cfc412333b20183c75.gif",
+});
 
 client.once("clientReady", () => {
   console.log(`Logged in as ${client.user.tag}`);
@@ -47,6 +64,19 @@ client.on("messageCreate", async (message) => {
     const command = args.shift().toLowerCase();
     const userId = message.author.id;
     const username = message.author.username;
+
+    /* ===== MEMBER TEST ===== */
+    if (command === "welcome") {
+      return memberService.test(message, "welcome");
+    }
+
+    if (command === "goodbye") {
+      return memberService.test(message, "goodbye");
+    }
+
+    if (command === "congrats") {
+      return memberService.test(message, "congrats");
+    }
 
     /* ===== UTILITY COMMANDS ===== */
     if (command === "ping") {
@@ -106,8 +136,7 @@ client.on("messageCreate", async (message) => {
 - !tone santai
 - !tone default
 \`\`\`
-`
-,
+`,
         allowedMentions: { repliedUser: false },
       });
     }
