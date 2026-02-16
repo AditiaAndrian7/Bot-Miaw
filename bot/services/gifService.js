@@ -1,8 +1,27 @@
-const { createCanvas, loadImage } = require("canvas");
+const { createCanvas, loadImage, registerFont } = require("canvas");
 const fs = require("fs");
 const path = require("path");
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
+
+// REGISTER FONT LOKAL!
+const fontPath = path.join(__dirname, "../fonts");
+try {
+  if (fs.existsSync(path.join(fontPath, "Poppins-Regular.ttf"))) {
+    registerFont(path.join(fontPath, "Poppins-Regular.ttf"), {
+      family: "Poppins",
+    });
+    registerFont(path.join(fontPath, "Poppins-Bold.ttf"), {
+      family: "Poppins",
+      weight: "bold",
+    });
+    console.log("✅ Font Poppins registered from local file");
+  } else {
+    console.warn("⚠️ Font files not found, using system fallback");
+  }
+} catch (err) {
+  console.warn("⚠️ Font registration failed:", err.message);
+}
 
 // Import ffmpeg
 let ffmpeg, ffmpegStatic;
@@ -31,25 +50,24 @@ const LAYOUT = {
   subtitle: { x: 180, y: HEIGHT / 2 + 45, fontSize: 22 },
 };
 
-// FUNGSI RENDER TEKS DENGAN FONT GENERIC
 function renderText(ctx, text, x, y, fontSize, isBold = false) {
   ctx.save();
 
-  // Gunakan font generic yang PASTI ADA di semua sistem
-  // 'sans-serif' akan pake font default sistem
-  ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px sans-serif`;
+  // PAKE FONT YANG SUDAH DIREGISTER
+  if (isBold) {
+    ctx.font = `bold ${fontSize}px "Poppins", "sans-serif"`;
+  } else {
+    ctx.font = `${fontSize}px "Poppins", "sans-serif"`;
+  }
 
-  // Stroke hitam TEBAL
+  // Stroke hitam
   ctx.strokeStyle = "#000000";
-  ctx.lineWidth = fontSize / 5; // Lebih tebal
+  ctx.lineWidth = fontSize / 6;
   ctx.strokeText(text, x, y);
 
   // Fill putih
   ctx.fillStyle = "#ffffff";
   ctx.fillText(text, x, y);
-
-  // Tambah stroke lagi biar makin jelas
-  ctx.strokeText(text, x, y);
 
   ctx.restore();
 }
@@ -76,7 +94,6 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     const canvas = createCanvas(WIDTH, HEIGHT);
     const ctx = canvas.getContext("2d");
 
-    // Background transparan
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
     // Gambar avatar
@@ -120,7 +137,7 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     ctx.stroke();
     ctx.restore();
 
-    // RENDER TEXT
+    // RENDER TEXT DENGAN FONT SENDIRI
     renderText(
       ctx,
       type.toUpperCase(),
@@ -155,7 +172,6 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
       );
     }
 
-    // Simpan overlay
     const overlayBuffer = canvas.toBuffer("image/png");
     fs.writeFileSync(tempOverlayPath, overlayBuffer);
     console.log(`✅ Overlay created`);
