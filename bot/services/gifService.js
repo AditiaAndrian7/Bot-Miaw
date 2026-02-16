@@ -13,10 +13,14 @@ const fontPath = path.join(__dirname, "../fonts");
 try {
   const regularPath = path.join(fontPath, "Poppins-Regular.ttf");
   const boldPath = path.join(fontPath, "Poppins-Bold.ttf");
+  const semiBoldPath = path.join(fontPath, "Poppins-SemiBold.ttf");
 
   if (fs.existsSync(regularPath) && fs.existsSync(boldPath)) {
     registerFont(regularPath, { family: "Poppins" });
     registerFont(boldPath, { family: "Poppins", weight: "bold" });
+    if (fs.existsSync(semiBoldPath)) {
+      registerFont(semiBoldPath, { family: "Poppins", weight: "600" });
+    }
     console.log("✅ Font Poppins registered from local file");
     fontRegistered = true;
   } else {
@@ -46,34 +50,70 @@ const TEMP_DIR = path.join(__dirname, "../temp");
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
 // ============================================
-// LAYOUT - UKURAN VALID
+// LAYOUT CONFIG - MUDAH DIATUR
 // ============================================
-const WIDTH = 500;
-const HEIGHT = 250;
+const WIDTH = 600; // Naikin biar lebih lega
+const HEIGHT = 350;
 
 const LAYOUT = {
-  avatar: { x: 35, y: HEIGHT / 2 - 50, size: 128 }, // GANTI 100 -> 128
-  title: { x: 180, y: HEIGHT / 2 - 40, fontSize: 30 },
-  username: { x: 180, y: HEIGHT / 2, fontSize: 24 },
-  subtitle: { x: 180, y: HEIGHT / 2 + 40, fontSize: 18 },
+  avatar: {
+    x: 50,
+    y: HEIGHT / 2 - 70,
+    size: 140, // Avatar lebih besar
+  },
+  title: {
+    x: 210,
+    y: HEIGHT / 2 - 60,
+    fontSize: 48, // BESAR
+    weight: "bold",
+  },
+  username: {
+    x: 210,
+    y: HEIGHT / 2,
+    fontSize: 36, // SEDANG
+    weight: "600", // Semi bold
+  },
+  subtitle: {
+    x: 210,
+    y: HEIGHT / 2 + 55,
+    fontSize: 28, // KECIL
+    weight: "normal",
+  },
 };
+
+// Fungsi untuk setting font dengan weight yang tepat
+function setFont(ctx, fontSize, weight = "normal") {
+  if (fontRegistered) {
+    switch (weight) {
+      case "bold":
+        ctx.font = `bold ${fontSize}px "Poppins", "sans-serif"`;
+        break;
+      case "600":
+        ctx.font = `600 ${fontSize}px "Poppins", "sans-serif"`;
+        break;
+      default:
+        ctx.font = `${fontSize}px "Poppins", "sans-serif"`;
+    }
+  } else {
+    ctx.font = `${weight} ${fontSize}px "sans-serif"`;
+  }
+}
 
 // ============================================
 // RENDER TEXT
 // ============================================
-function renderText(ctx, text, x, y, fontSize, isBold = false) {
+function renderText(ctx, text, x, y, fontSize, weight = "normal") {
   ctx.save();
 
-  if (fontRegistered) {
-    ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px "Poppins", "sans-serif"`;
-  } else {
-    ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px "sans-serif"`;
-  }
+  setFont(ctx, fontSize, weight);
 
+  // Shadow untuk efek timbul
   ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-  ctx.shadowBlur = 8;
-  ctx.shadowOffsetX = 3;
-  ctx.shadowOffsetY = 3;
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetX = 4;
+  ctx.shadowOffsetY = 4;
+
+  // Fill putih
   ctx.fillStyle = "#ffffff";
   ctx.fillText(text, x, y);
 
@@ -105,10 +145,10 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
     // ============================================
-    // AVATAR - PAKAI UKURAN 128 (VALID)
+    // AVATAR - Lebih besar
     // ============================================
     const avatar = await loadImage(
-      member.user.displayAvatarURL({ extension: "png", size: 128 }), // 128 VALID
+      member.user.displayAvatarURL({ extension: "png", size: 256 }), // Naikin ke 256
     );
 
     // Avatar bulat
@@ -132,50 +172,62 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     );
     ctx.restore();
 
-    // Stroke avatar
+    // Stroke avatar - Lebih tebal
     ctx.save();
     ctx.beginPath();
     ctx.arc(
       LAYOUT.avatar.x + LAYOUT.avatar.size / 2,
       LAYOUT.avatar.y + LAYOUT.avatar.size / 2,
-      LAYOUT.avatar.size / 2 + 2,
+      LAYOUT.avatar.size / 2 + 3,
       0,
       Math.PI * 2,
     );
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.lineWidth = 4;
     ctx.stroke();
     ctx.restore();
 
     // ============================================
-    // TEXT
+    // TEXT - Dengan ukuran dan jarak yang diatur
     // ============================================
+
+    // Title (WELCOME/GOODBYE/CONGRATS) - PALING BESAR
     renderText(
       ctx,
       type.toUpperCase(),
       LAYOUT.title.x,
       LAYOUT.title.y,
-      30,
-      true,
+      48,
+      "bold",
     );
+
+    // Username - SEDANG, SEMI BOLD
     renderText(
       ctx,
       member.user.username,
       LAYOUT.username.x,
       LAYOUT.username.y,
-      24,
+      36,
+      "600",
     );
 
+    // Subtitle - LEBIH KECIL
+    let subtitleText = "";
     if (type === "welcome" || type === "goodbye") {
+      subtitleText = member.guild.name;
+    } else if (type === "congrats" && extra.roleName) {
+      subtitleText = extra.roleName;
+    }
+
+    if (subtitleText) {
       renderText(
         ctx,
-        member.guild.name,
+        subtitleText,
         LAYOUT.subtitle.x,
         LAYOUT.subtitle.y,
-        18,
+        28,
+        "normal",
       );
-    } else if (type === "congrats" && extra.roleName) {
-      renderText(ctx, extra.roleName, LAYOUT.subtitle.x, LAYOUT.subtitle.y, 18);
     }
 
     const overlayBuffer = canvas.toBuffer("image/png");
@@ -193,7 +245,7 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
         .input(tempOverlayPath)
         .outputOptions([
           "-filter_complex",
-          "[0:v]scale=500:250:flags=lanczos[bg];[bg][1:v]overlay=0:0",
+          `[0:v]scale=${WIDTH}:${HEIGHT}:flags=lanczos[bg];[bg][1:v]overlay=0:0`,
           "-pix_fmt",
           "rgb24",
           "-r",

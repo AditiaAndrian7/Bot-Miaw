@@ -1,0 +1,26 @@
+{
+  "1305784726757314601": {
+    "welcomeChannelId": "1427864713999679489",
+    "autoRoleName": "Member",
+    "welcomeEnabled": true,
+    "goodbyeEnabled": true,
+    "congratsEnabled": true,
+    "backgrounds": {
+      "welcome": "https://i.pinimg.com/originals/c2/39/78/c239781a884d363b6ee17280606b671f.gif",
+      "goodbye": "https://i.pinimg.com/originals/00/9b/aa/009baaa4b96631d3d90740aac3b8947a.gif",
+      "congrats": "https://i.pinimg.com/originals/2b/6e/e1/2b6ee1af25e9b5cfc412333b20183c75.gif"
+    }
+  },
+  "1472788597282177125": {
+    "welcomeChannelId": "1472788597882093682",
+    "autoRoleName": "Member",
+    "welcomeEnabled": true,
+    "goodbyeEnabled": true,
+    "congratsEnabled": true,
+    "backgrounds": {
+      "welcome": "https://i.pinimg.com/originals/2f/24/61/2f24616bd3e4805e20b6a91cb3b6dbe4.gif",
+      "goodbye": "https://i.pinimg.com/originals/00/9b/aa/009baaa4b96631d3d90740aac3b8947a.gif",
+      "congrats": "https://i.pinimg.com/originals/2b/6e/e1/2b6ee1af25e9b5cfc412333b20183c75.gif"
+    }
+  }
+}

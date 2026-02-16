@@ -23,24 +23,304 @@ let botActive = true;
 let userTones = {};
 
 // ===============================
-// MEMBER SERVICE (WELCOME SYSTEM)
+// MEMBER SERVICE - TANPA HARDCODE
 // ===============================
-const memberService = new MemberService(client, {
-  welcomeChannelId: "1427864713999679489",
-  autoRoleName: "Member",
+const memberService = new MemberService(client);
 
-  welcomeBackground:
-    "https://i.pinimg.com/originals/2f/24/61/2f24616bd3e4805e20b6a91cb3b6dbe4.gif",
-  goodbyeBackground:
-    "https://i.pinimg.com/originals/00/9b/aa/009baaa4b96631d3d90740aac3b8947a.gif",
-  congratsBackground:
-    "https://i.pinimg.com/originals/2b/6e/e1/2b6ee1af25e9b5cfc412333b20183c75.gif",
-});
-
+// ===============================
+// CLIENT READY EVENT
+// ===============================
 client.once("clientReady", () => {
-  console.log(`Logged in as ${client.user.tag}`);
+  console.log(`✅ Logged in as ${client.user.tag}`);
+  console.log(`📊 Bot aktif di ${client.guilds.cache.size} server`);
+
+  // Tampilkan daftar server
+  client.guilds.cache.forEach((guild) => {
+    console.log(`   - ${guild.name} (${guild.memberCount} members)`);
+  });
 });
 
+// ===============================
+// GUILD CREATE EVENT (Bot masuk server baru)
+// ===============================
+client.on("guildCreate", async (guild) => {
+  console.log(`📥 Bot ditambahkan ke server baru: ${guild.name} (${guild.id})`);
+
+  // Auto-set default config untuk server baru
+  const defaultConfig = {
+    welcomeChannelId: guild.systemChannel?.id || null,
+    autoRoleName: "Member",
+    welcomeEnabled: true,
+    goodbyeEnabled: true,
+    congratsEnabled: true,
+    backgrounds: {
+      welcome:
+        "https://i.pinimg.com/originals/2f/24/61/2f24616bd3e4805e20b6a91cb3b6dbe4.gif",
+      goodbye:
+        "https://i.pinimg.com/originals/00/9b/aa/009baaa4b96631d3d90740aac3b8947a.gif",
+      congrats:
+        "https://i.pinimg.com/originals/2b/6e/e1/2b6ee1af25e9b5cfc412333b20183c75.gif",
+    },
+    messages: {
+      welcome: [
+        "✨ Selamat datang di **{server}**, {user}! 🎉",
+        "Halo {user}, selamat bergabung di **{server}**! Semoga betah ya 🥳",
+        "{user} just joined the party! 🎊",
+        "🎈 Hai {user}, selamat datang! Jangan lupa baca rules ya 📚",
+      ],
+      goodbye: [
+        "👋 Selamat tinggal {user}, semoga sukses di mana pun berada!",
+        "{user} telah meninggalkan server **{server}**. Sampai jumpa lagi! 🫡",
+        "Bye bye {user}, server jadi sepi tanpamu 😢",
+      ],
+      congrats: [
+        "🎉 **Selamat** {user}! Kamu sekarang memiliki role **{role}**!",
+        "🥳 {user} mendapatkan role baru: **{role}**!",
+        "✨ {user} naik level! Role **{role}** telah ditambahkan!",
+      ],
+    },
+  };
+
+  await memberService.updateConfig(guild.id, defaultConfig);
+  console.log(`✅ Config created for ${guild.name}`);
+});
+
+// ===============================
+// GUILD DELETE EVENT (Bot keluar dari server)
+// ===============================
+client.on("guildDelete", (guild) => {
+  console.log(`📤 Bot keluar dari server: ${guild.name} (${guild.id})`);
+});
+
+// ===============================
+// ADMIN COMMANDS HANDLER
+// ===============================
+async function handleAdminCommands(message, command, args) {
+  if (!message.member.permissions.has("Administrator")) {
+    return message.reply(
+      "❌ Kamu butuh permission **Administrator** untuk menggunakan command ini!",
+    );
+  }
+
+  switch (command) {
+    // ===== SIMPLE CHANNEL SETTER (PAKAI MENTION) =====
+    case "setchannel":
+    case "setchannel2": {
+      const channel = message.mentions.channels.first();
+      if (!channel) {
+        return message.reply(
+          "❌ Tag channel yang mau dijadikan welcome channel!\nContoh: `!setchannel #welcome`",
+        );
+      }
+
+      await memberService.setWelcomeChannel(message.guild.id, channel.id);
+      await message.reply(`✅ Welcome channel set to ${channel}!`);
+
+      // Test kirim card
+      setTimeout(() => {
+        memberService.test(message, "welcome").catch(() => {});
+      }, 1000);
+      return;
+    }
+
+    // ===== INTERACTIVE CHANNEL PICKER =====
+    case "pickchannel": {
+      // Tampilkan daftar channel
+      const channels = message.guild.channels.cache
+        .filter((c) => c.type === 0) // 0 = text channel
+        .map((c) => `#${c.name}`)
+        .join("\n");
+
+      await message.reply(
+        "📋 **Daftar Text Channel:**\n" +
+          "Ketik **nama channel** yang mau dipakai untuk welcome:\n\n" +
+          channels,
+      );
+
+      // Collector untuk menunggu response
+      const filter = (m) => m.author.id === message.author.id;
+      const collector = message.channel.createMessageCollector({
+        filter,
+        time: 30000,
+        max: 1,
+      });
+
+      collector.on("collect", async (m) => {
+        const channelName = m.content.replace("#", "");
+        const selectedChannel = message.guild.channels.cache.find(
+          (c) => c.name === channelName,
+        );
+
+        if (selectedChannel) {
+          await memberService.setWelcomeChannel(
+            message.guild.id,
+            selectedChannel.id,
+          );
+          m.reply(`✅ Welcome channel set to ${selectedChannel}!`);
+
+          // Test kirim card
+          setTimeout(() => {
+            memberService.test(message, "welcome").catch(() => {});
+          }, 1000);
+        } else {
+          m.reply(
+            "❌ Channel tidak ditemukan. Coba lagi dengan `!pickchannel`",
+          );
+        }
+      });
+
+      collector.on("end", (collected) => {
+        if (collected.size === 0) {
+          message.reply("⏰ Timeout! Gunakan `!pickchannel` lagi.");
+        }
+      });
+      return;
+    }
+
+    // ===== LIST ALL CHANNELS =====
+    case "listchannel": {
+      const channels = message.guild.channels.cache
+        .filter((c) => c.type === 0)
+        .map((c) => `#${c.name} (${c.id})`)
+        .join("\n");
+
+      return message.reply(`📋 **Daftar Text Channel:**\n${channels}`);
+    }
+
+    // ===== CHECK WELCOME CHANNEL =====
+    case "cekwelcome": {
+      const config = memberService.getConfig(message.guild.id);
+
+      if (config.welcomeChannelId) {
+        const channel = message.guild.channels.cache.get(
+          config.welcomeChannelId,
+        );
+        if (channel) {
+          return message.reply(
+            `📢 **Welcome Channel:** ${channel}\n` +
+              `**Auto Role:** ${config.autoRoleName}\n` +
+              `**Welcome:** ${config.welcomeEnabled ? "✅" : "❌"} | ` +
+              `**Goodbye:** ${config.goodbyeEnabled ? "✅" : "❌"} | ` +
+              `**Congrats:** ${config.congratsEnabled ? "✅" : "❌"}`,
+          );
+        } else {
+          return message.reply(
+            `⚠️ Welcome channel ID: ${config.welcomeChannelId} tapi channel tidak ditemukan!`,
+          );
+        }
+      } else {
+        return message.reply(
+          "❌ Belum ada welcome channel. Gunakan `!setchannel #channel`",
+        );
+      }
+    }
+
+    // ===== SET AUTO ROLE =====
+    case "setrole": {
+      const roleName = args.join(" ");
+      if (!roleName) {
+        return message.reply(
+          "❌ Masukkan nama role!\nContoh: `!setrole Member`",
+        );
+      }
+
+      await memberService.setAutoRole(message.guild.id, roleName);
+      return message.reply(`✅ Auto role set to **${roleName}**`);
+    }
+
+    // ===== SET BACKGROUND =====
+    case "setbg": {
+      const type = args[0]; // welcome/goodbye/congrats
+      const url = args[1];
+
+      if (!type || !url || !["welcome", "goodbye", "congrats"].includes(type)) {
+        return message.reply(
+          "❌ Format salah!\nContoh: `!setbg welcome https://url-gambar.gif`",
+        );
+      }
+
+      await memberService.setBackground(message.guild.id, type, url);
+      return message.reply(`✅ Background **${type}** updated!`);
+    }
+
+    // ===== SET CUSTOM MESSAGE =====
+    case "setmsg": {
+      const type = args[0];
+      const msg = args.slice(1).join(" ");
+
+      if (!type || !msg || !["welcome", "goodbye", "congrats"].includes(type)) {
+        return message.reply(
+          "❌ Format salah!\nContoh: `!setmsg welcome Selamat datang {user} di {server}!`",
+        );
+      }
+
+      await memberService.setMessage(message.guild.id, type, msg);
+      return message.reply(`✅ **${type}** message updated!`);
+    }
+
+    // ===== TOGGLE FEATURE =====
+    case "toggle": {
+      const feature = args[0];
+      if (!feature || !["welcome", "goodbye", "congrats"].includes(feature)) {
+        return message.reply("❌ Pilih: `welcome` / `goodbye` / `congrats`");
+      }
+
+      const config = memberService.getConfig(message.guild.id);
+      await memberService.toggleFeature(message.guild.id, feature);
+
+      const newStatus = !config[`${feature}Enabled`];
+      return message.reply(
+        `✅ **${feature}** ${newStatus ? "✅ enabled" : "❌ disabled"}`,
+      );
+    }
+
+    // ===== VIEW CONFIG =====
+    case "config": {
+      const config = memberService.getConfig(message.guild.id);
+
+      const embed = {
+        color: 0x0099ff,
+        title: "⚙️ Server Configuration",
+        fields: [
+          {
+            name: "📢 Welcome Channel",
+            value: config.welcomeChannelId
+              ? `<#${config.welcomeChannelId}>`
+              : "Not Set",
+            inline: true,
+          },
+          {
+            name: "👥 Auto Role",
+            value: config.autoRoleName || "None",
+            inline: true,
+          },
+          {
+            name: "✅ Features",
+            value: `Welcome: ${config.welcomeEnabled ? "✅" : "❌"} | Goodbye: ${config.goodbyeEnabled ? "✅" : "❌"} | Congrats: ${config.congratsEnabled ? "✅" : "❌"}`,
+            inline: false,
+          },
+          {
+            name: "💬 Welcome Message",
+            value:
+              config.messages?.welcome?.[0]?.substring(0, 100) + "..." ||
+              "Default",
+            inline: false,
+          },
+        ],
+        footer: { text: `Server ID: ${message.guild.id}` },
+      };
+
+      return message.reply({ embeds: [embed] });
+    }
+
+    default:
+      return null;
+  }
+}
+
+// ===============================
+// MESSAGE CREATE EVENT
+// ===============================
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   if (!botActive) return;
@@ -65,6 +345,10 @@ client.on("messageCreate", async (message) => {
     const userId = message.author.id;
     const username = message.author.username;
 
+    /* ===== CEK ADMIN COMMANDS DULU ===== */
+    const adminResult = await handleAdminCommands(message, command, args);
+    if (adminResult) return adminResult;
+
     /* ===== MEMBER TEST ===== */
     if (command === "welcome") {
       return memberService.test(message, "welcome");
@@ -88,19 +372,38 @@ client.on("messageCreate", async (message) => {
 
     if (command === "info") {
       return message.reply(
-        `Saya adalah bot Miaw versi 1.0, dibuat oleh <@${"1234411792785215528"}>`,
+        ` **Bot Miaw**\n` +
+          `Nama: ${client.user.tag}\n` +
+          `Server: ${client.guilds.cache.size} server\n` +
+          `Member Total: ${client.guilds.cache.reduce((a, g) => a + g.memberCount, 0)} users\n` +
+          `Dibuat oleh: <@1234411792785215528>\n` +
+          `Versi: 2.0`,
       );
     }
 
     if (command === "server") {
+      const config = memberService.getConfig(message.guild.id);
       return message.reply(
-        `Server ini bernama: ${message.guild.name}, total member: ${message.guild.memberCount}`,
+        `**Server Info**\n` +
+          `Nama: ${message.guild.name}\n` +
+          `ID: ${message.guild.id}\n` +
+          `Member: ${message.guild.memberCount}\n` +
+          `Owner: <@${message.guild.ownerId}>\n` +
+          `Welcome Channel: ${config.welcomeChannelId ? `<#${config.welcomeChannelId}>` : "Not Set"}\n` +
+          `Auto Role: ${config.autoRoleName || "None"}`,
       );
     }
 
     if (command === "user") {
       const mentioned = message.mentions.users.first() || message.author;
-      return message.reply(`Nama: ${mentioned.username}\nID: ${mentioned.id}`);
+      const member = message.guild.members.cache.get(mentioned.id);
+      return message.reply(
+        `**User Info**\n` +
+          `Nama: ${mentioned.username}\n` +
+          `ID: ${mentioned.id}\n` +
+          `Join: <t:${Math.floor(member.joinedAt / 1000)}:R>\n` +
+          `Roles: ${member.roles.cache.size - 1} roles`,
+      );
     }
 
     /* ===== MENU ===== */
@@ -110,31 +413,42 @@ client.on("messageCreate", async (message) => {
 \`\`\`
 📜 BOT MENU
 
-⚙️ Utility
-- !ping
-- !info
-- !server
-- !user @mention
+⚙️ UTILITY
+!ping              - Cek latency bot
+!info              - Info bot
+!server            - Info server
+!user @mention     - Info user
 
-⚒️ Tools
-- !ppt <topik>
-- !makalah <topik>
-- !critical <topik>
+⚒️ TOOLS
+!ppt <topik>       - Buat presentasi
+!makalah <topik>   - Buat makalah  
+!critical <topik>  - Analisis kritis
 
-🎶 Music
-- !music play <judul>
-- !music pause
-- !music resume
-- !music skip
-- !music stop
-- !music queue
+🎶 MUSIC
+!music play <judul>  - Putar lagu
+!music pause         - Jeda
+!music resume        - Lanjut
+!music skip          - Lewati
+!music stop          - Berhenti
+!music queue         - Antrian
 
-🎭 Tone
-- !tone lembut
-- !tone tegas
-- !tone pemarah
-- !tone santai
-- !tone default
+🎭 TONE
+!tone lembut      - Tone ramah
+!tone tegas       - Tone profesional  
+!tone pemarah     - Tone marah
+!tone santai      - Tone santai
+!tone default     - Reset tone
+
+⚙️ ADMIN (butuh Admin)
+!setchannel #channel        - Set welcome channel (pakai mention)
+!pickchannel               - Pilih channel dari daftar
+!listchannel               - Lihat semua channel
+!cekwelcome                - Cek welcome channel yg sudah diset
+!setrole <nama>            - Set auto role
+!setbg [type] [url]        - Set background
+!setmsg [type] [pesan]     - Set custom message
+!toggle [feature]          - Enable/disable fitur
+!config                     - Lihat config server
 \`\`\`
 `,
         allowedMentions: { repliedUser: false },
@@ -147,22 +461,23 @@ client.on("messageCreate", async (message) => {
 
       if (!selected || selected === "default") {
         delete userTones[userId];
-        return message.reply("Tone dikembalikan ke default.");
+        return message.reply("🎭 Tone dikembalikan ke default.");
       }
 
       if (!config.tones[selected]) {
-        return message.reply("Tone tidak tersedia.");
+        return message.reply(
+          "❌ Tone tidak tersedia. Pilih: lembut, tegas, pemarah, santai",
+        );
       }
 
       userTones[userId] = selected;
-      return message.reply(`Tone diubah ke: ${selected}`);
+      return message.reply(`🎭 Tone diubah ke: **${selected}**`);
     }
 
     /* ===== MUSIC ===== */
     if (command === "music") {
       const subCommand = args[0]?.toLowerCase();
       const keyword = args.slice(1).join(" ");
-      const userId = message.author.id;
 
       const musicService = require("./services/musicService");
 
@@ -170,7 +485,9 @@ client.on("messageCreate", async (message) => {
         switch (subCommand) {
           case "play":
             if (!keyword)
-              return message.reply("Masukkan lagu yang ingin diputar!");
+              return message.reply(
+                "🎵 Masukkan judul lagu!\nContoh: `!music play tak ingin usai`",
+              );
 
             const currentQueue = musicService.getQueue(message.guild.id);
             const wasEmpty = currentQueue.length === 0;
@@ -182,10 +499,10 @@ client.on("messageCreate", async (message) => {
             );
 
             if (wasEmpty) {
-              return message.reply(`🎶 **Memulai lagu:** ${songTitle}`);
+              return message.reply(`🎶 **Memutar:** ${songTitle}`);
             } else {
               return message.reply(
-                `📥 **Menambahkan ke antrian:** ${songTitle}`,
+                `📥 **Ditambahkan ke antrian:** ${songTitle}`,
               );
             }
 
@@ -207,20 +524,29 @@ client.on("messageCreate", async (message) => {
 
           case "queue":
             const queueList = musicService.getQueue(message.guild.id);
-            if (!queueList.length) return message.reply("Antrian kosong.");
-            return message.reply(
-              "🎵 **Antrian saat ini:**\n" +
-                queueList.map((s, i) => `${i + 1}. ${s.title}`).join("\n"),
-            );
+            if (!queueList.length) return message.reply("📭 Antrian kosong.");
+
+            let queueText = "🎵 **Antrian:**\n";
+            queueList.forEach((song, i) => {
+              queueText += `${i + 1}. ${song.title} - <@${song.requestedBy}>\n`;
+            });
+
+            return message.reply(queueText);
 
           default:
             return message.reply(
-              "Gunakan: `!music play [judul]`, `pause`, `resume`, `stop`, `skip`, `queue`",
+              "🎵 **Music Commands:**\n" +
+                "`!music play [judul]` - Putar lagu\n" +
+                "`!music pause` - Jeda\n" +
+                "`!music resume` - Lanjut\n" +
+                "`!music skip` - Lewati\n" +
+                "`!music stop` - Berhenti\n" +
+                "`!music queue` - Antrian",
             );
         }
       } catch (err) {
         console.error("Music Error:", err);
-        return message.reply(`Terjadi error: ${err.message}`);
+        return message.reply(`❌ Error: ${err.message}`);
       }
     }
 
@@ -231,7 +557,10 @@ client.on("messageCreate", async (message) => {
     /* ===== PPT ===== */
     if (command === "ppt") {
       const topic = args.join(" ");
-      if (!topic) return message.reply("Masukkan topik PPT.");
+      if (!topic)
+        return message.reply(
+          "📊 Masukkan topik PPT!\nContoh: `!ppt Artificial Intelligence`",
+        );
 
       await message.channel.sendTyping();
 
@@ -269,23 +598,24 @@ Aturan:
         parsed = JSON.parse(cleanJson);
       } catch (err) {
         console.log("AI RAW OUTPUT:\n", aiRaw);
-        return message.reply("AI gagal menghasilkan format PPT yang valid.");
+        return message.reply("❌ AI gagal menghasilkan format PPT yang valid.");
       }
 
-      const filePath = await generatePPTX({
-        data: parsed,
-        userId,
-      });
+      const filePath = await generatePPTX({ data: parsed, userId });
 
       return message.reply({
-        content: "PPT berhasil dibuat:",
+        content: "📊 **PPT berhasil dibuat!**",
         files: [filePath],
       });
     }
 
+    /* ===== MAKALAH ===== */
     if (command === "makalah") {
       const topic = args.join(" ");
-      if (!topic) return message.reply("Masukkan topik makalah.");
+      if (!topic)
+        return message.reply(
+          "📝 Masukkan topik makalah!\nContoh: `!makalah Perubahan Iklim`",
+        );
 
       await message.channel.sendTyping();
 
@@ -310,7 +640,7 @@ Gunakan bahasa formal akademik.`,
           ? config.tones[userTones[userId]]
           : "",
         toolInstruction: config.tools.makalah,
-        imageUrl, // Kirim gambar ke AI jika ada
+        imageUrl,
       });
 
       const filePath = await generatePDF({
@@ -321,7 +651,7 @@ Gunakan bahasa formal akademik.`,
       });
 
       return message.reply({
-        content: "Makalah berhasil dibuat:",
+        content: "📄 **Makalah berhasil dibuat!**",
         files: [filePath],
       });
     }
@@ -329,7 +659,10 @@ Gunakan bahasa formal akademik.`,
     /* ===== CRITICAL ===== */
     if (command === "critical") {
       const topic = args.join(" ");
-      if (!topic) return message.reply("Masukkan topik.");
+      if (!topic)
+        return message.reply(
+          "🤔 Masukkan topik!\nContoh: `!critical Dampak Media Sosial`",
+        );
 
       await message.channel.sendTyping();
 
@@ -339,7 +672,7 @@ Gunakan bahasa formal akademik.`,
           ? config.tones[userTones[userId]]
           : "",
         toolInstruction: config.tools.critical,
-        imageUrl, // Kirim gambar ke AI jika ada
+        imageUrl,
       });
 
       return sendSmartReply(message, reply);
@@ -371,7 +704,7 @@ Gunakan bahasa formal akademik.`,
         userMessage: cleaned,
         history,
         toneInstruction,
-        imageUrl, // Kirim gambar ke AI jika ada
+        imageUrl,
       });
 
       memoryService.saveMemory(userId, cleaned, reply);
@@ -379,11 +712,18 @@ Gunakan bahasa formal akademik.`,
     } catch (err) {
       console.error("AI Error:", err);
       await message.reply({
-        content: "Terjadi error saat memproses AI.",
+        content: "❌ Terjadi error saat memproses AI.",
         allowedMentions: { repliedUser: false },
       });
     }
   }
+});
+
+// ===============================
+// ERROR HANDLING
+// ===============================
+process.on("unhandledRejection", (error) => {
+  console.error("❌ Unhandled promise rejection:", error);
 });
 
 client.login(process.env.DISCORD_TOKEN);

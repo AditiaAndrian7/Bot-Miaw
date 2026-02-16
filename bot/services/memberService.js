@@ -1,17 +1,99 @@
 const { AttachmentBuilder } = require("discord.js");
 const { generateCard } = require("../utils/cardGenerator");
+const fs = require("fs");
+const path = require("path");
 
 class MemberService {
   constructor(client, options = {}) {
     this.client = client;
-    this.welcomeChannelId = options.welcomeChannelId;
-    this.autoRoleName = options.autoRoleName || "Member";
-    this.backgrounds = {
-      welcome: options.welcomeBackground,
-      goodbye: options.goodbyeBackground,
-      congrats: options.congratsBackground,
-    };
+    this.serverConfigs = new Map();
+    this.configPath = path.join(__dirname, "../server-channels.json");
+    this.loadConfigs();
     this.registerEvents();
+  }
+
+  loadConfigs() {
+    try {
+      if (fs.existsSync(this.configPath)) {
+        const data = fs.readFileSync(this.configPath, "utf8");
+        const configs = JSON.parse(data);
+        this.serverConfigs = new Map(Object.entries(configs));
+        console.log(`✅ Loaded config for ${this.serverConfigs.size} servers`);
+      } else {
+        console.log("📝 Membuat file config baru...");
+        fs.writeFileSync(this.configPath, JSON.stringify({}, null, 2));
+      }
+    } catch (err) {
+      console.error("❌ Gagal load config:", err.message);
+    }
+  }
+
+  saveConfigs() {
+    try {
+      const configs = Object.fromEntries(this.serverConfigs);
+      fs.writeFileSync(this.configPath, JSON.stringify(configs, null, 2));
+    } catch (err) {
+      console.error("❌ Gagal save config:", err.message);
+    }
+  }
+
+  getConfig(guildId) {
+    const defaultConfig = {
+      welcomeChannelId: null,
+      autoRoleName: "Member",
+      welcomeEnabled: true,
+      goodbyeEnabled: true,
+      congratsEnabled: true,
+      backgrounds: {
+        welcome:
+          "https://i.pinimg.com/originals/2f/24/61/2f24616bd3e4805e20b6a91cb3b6dbe4.gif",
+        goodbye:
+          "https://i.pinimg.com/originals/00/9b/aa/009baaa4b96631d3d90740aac3b8947a.gif",
+        congrats:
+          "https://i.pinimg.com/originals/2b/6e/e1/2b6ee1af25e9b5cfc412333b20183c75.gif",
+      },
+    };
+
+    return this.serverConfigs.get(guildId) || defaultConfig;
+  }
+
+  async setWelcomeChannel(guildId, channelId) {
+    const config = this.getConfig(guildId);
+    config.welcomeChannelId = channelId;
+    this.serverConfigs.set(guildId, config);
+    this.saveConfigs();
+  }
+
+  async setAutoRole(guildId, roleName) {
+    const config = this.getConfig(guildId);
+    config.autoRoleName = roleName;
+    this.serverConfigs.set(guildId, config);
+    this.saveConfigs();
+  }
+
+  async setBackground(guildId, type, url) {
+    const config = this.getConfig(guildId);
+    if (!config.backgrounds) config.backgrounds = {};
+    config.backgrounds[type] = url;
+    this.serverConfigs.set(guildId, config);
+    this.saveConfigs();
+  }
+
+  async setMessage(guildId, type, message) {
+    const config = this.getConfig(guildId);
+    if (!config.messages) config.messages = {};
+    if (!config.messages[type]) config.messages[type] = [];
+    config.messages[type] = [message];
+    this.serverConfigs.set(guildId, config);
+    this.saveConfigs();
+  }
+
+  async toggleFeature(guildId, feature) {
+    const config = this.getConfig(guildId);
+    const featureKey = `${feature}Enabled`;
+    config[featureKey] = !config[featureKey];
+    this.serverConfigs.set(guildId, config);
+    this.saveConfigs();
   }
 
   registerEvents() {
@@ -22,19 +104,24 @@ class MemberService {
     );
   }
 
-  // Helper untuk mendapatkan channel tujuan
   getChannel(guild) {
-    return (
-      guild.channels.cache.get(this.welcomeChannelId) || guild.systemChannel
-    );
+    const config = this.getConfig(guild.id);
+
+    if (config.welcomeChannelId) {
+      const channel = guild.channels.cache.get(config.welcomeChannelId);
+      if (channel) return channel;
+    }
+
+    return null;
   }
 
-  // Format pesan dengan mention
   formatMessage(type, member, extra = {}) {
+    const config = this.getConfig(member.guild.id);
     const mention = `<@${member.user.id}>`;
     const serverName = member.guild.name;
 
-    const messages = {
+    // Default messages
+    const defaultMessages = {
       welcome: [
         `✨ **Selamat datang** di **${serverName}**, ${mention}! 🎉`,
         `Halo ${mention}, selamat bergabung di server **${serverName}**! Semoga betah ya 🥳`,
@@ -55,23 +142,44 @@ class MemberService {
       ],
     };
 
-    // Pilih pesan random dari array
-    const messageList = messages[type] || messages.welcome;
-    const randomIndex = Math.floor(Math.random() * messageList.length);
-    return messageList[randomIndex];
+    // Gunakan custom messages jika ada
+    const messages =
+      config.messages?.[type] ||
+      defaultMessages[type] ||
+      defaultMessages.welcome;
+
+    // Pilih random
+    const randomIndex = Math.floor(Math.random() * messages.length);
+    let message = messages[randomIndex];
+
+    // Replace variables
+    message = message
+      .replace(/{user}/g, mention)
+      .replace(/{server}/g, serverName)
+      .replace(/{role}/g, extra.roleName || "");
+
+    return message;
   }
 
   async sendCard(member, type, extra = {}) {
     try {
-      const backgroundURL = this.backgrounds[type];
+      const config = this.getConfig(member.guild.id);
+
+      // Cek fitur enabled
+      if (type === "welcome" && !config.welcomeEnabled) return;
+      if (type === "goodbye" && !config.goodbyeEnabled) return;
+      if (type === "congrats" && !config.congratsEnabled) return;
+
+      const backgroundURL = config.backgrounds?.[type];
       if (!backgroundURL) {
-        console.warn(`Background untuk ${type} tidak diset`);
+        console.warn(
+          `Background untuk ${type} tidak diset di server ${member.guild.id}`,
+        );
         return;
       }
 
       console.log(`📤 Generating ${type} card for ${member.user.tag}...`);
 
-      // Generate card
       const buffer = await generateCard({
         member,
         type,
@@ -86,14 +194,17 @@ class MemberService {
 
       const channel = this.getChannel(member.guild);
       if (!channel) {
-        console.warn(`⚠️ Tidak ada channel untuk mengirim kartu ${type}`);
+        console.warn(
+          `⚠️ Tidak ada welcome channel di server ${member.guild.name} (${member.guild.id})`,
+        );
+        console.log(
+          `ℹ️ Admin bisa set channel dengan: !setchannel2 #nama-channel`,
+        );
         return;
       }
 
-      // Dapatkan pesan sesuai tipe
       const messageText = this.formatMessage(type, member, extra);
 
-      // Kirim pesan + card
       await channel.send({
         content: messageText,
         files: [attachment],
@@ -102,33 +213,29 @@ class MemberService {
       console.log(`✅ Card ${type} sent successfully to ${member.user.tag}`);
     } catch (err) {
       console.error(`❌ Error sending ${type} card:`, err);
-
-      // Fallback: kirim pesan saja tanpa card
-      const channel = this.getChannel(member.guild);
-      if (channel) {
-        const fallbackMessage = this.formatMessage(type, member, extra);
-        await channel.send(fallbackMessage).catch(() => {});
-      }
     }
   }
 
   async handleWelcome(member) {
+    const config = this.getConfig(member.guild.id);
+
     // Kasih role otomatis
-    const role = member.guild.roles.cache.find(
-      (r) => r.name === this.autoRoleName,
-    );
-    if (role) {
-      await member.roles
-        .add(role)
-        .catch((err) =>
-          console.warn(
-            `⚠️ Gagal kasih role ${this.autoRoleName}:`,
-            err.message,
-          ),
-        );
+    if (config.autoRoleName) {
+      const role = member.guild.roles.cache.find(
+        (r) => r.name === config.autoRoleName,
+      );
+      if (role) {
+        await member.roles
+          .add(role)
+          .catch((err) =>
+            console.warn(
+              `⚠️ Gagal kasih role ${config.autoRoleName}:`,
+              err.message,
+            ),
+          );
+      }
     }
 
-    // Kirim card welcome
     await this.sendCard(member, "welcome");
   }
 
@@ -137,7 +244,6 @@ class MemberService {
   }
 
   async handleRoleUpdate(oldMember, newMember) {
-    // Cek apakah ada role baru yang ditambahkan
     if (oldMember.roles.cache.size < newMember.roles.cache.size) {
       const addedRole = newMember.roles.cache.find(
         (role) => !oldMember.roles.cache.has(role.id),
@@ -151,7 +257,6 @@ class MemberService {
     }
   }
 
-  // Method untuk testing manual
   async test(message, type) {
     const extra = type === "congrats" ? { roleName: "Member" } : {};
     await this.sendCard(message.member, type, extra);
