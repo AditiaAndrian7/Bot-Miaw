@@ -24,9 +24,12 @@ if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 const WIDTH = 600;
 const HEIGHT = 300;
 
-// Font stack untuk semua OS
-const FONT_STACK =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+// FONT DISCORD DEFAULT!
+// Desktop: Whitney, Web: Helvetica, Mobile: System
+const DISCORD_FONT =
+  '"Whitney", "Helvetica Neue", "Helvetica", "Arial", "sans-serif"';
+const DISCORD_BOLD =
+  '"Whitney Bold", "Helvetica Neue Bold", "Helvetica Bold", "Arial Bold", "sans-serif"';
 
 // Layout yang rapi
 const LAYOUT = {
@@ -36,9 +39,20 @@ const LAYOUT = {
   subtitle: { x: 180, y: HEIGHT / 2 + 45, fontSize: 22 },
 };
 
-// Helper function untuk setting font
+// Helper function untuk setting font ala Discord
 function setFont(ctx, weight, size) {
-  ctx.font = `${weight} ${size}px ${FONT_STACK}`;
+  if (weight === "bold") {
+    ctx.font = `${size}px ${DISCORD_BOLD}`;
+  } else {
+    ctx.font = `${size}px ${DISCORD_FONT}`;
+  }
+
+  // Fallback kalau font ga kedetect
+  try {
+    ctx.measureText("Test");
+  } catch {
+    ctx.font = `${size}px "Arial", "sans-serif"`;
+  }
 }
 
 async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
@@ -55,9 +69,9 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     const response = await fetch(backgroundURL);
     if (!response.ok)
       throw new Error(`Gagal download GIF: ${response.statusText}`);
-    const buffer = await response.buffer();
-    fs.writeFileSync(tempBgPath, buffer);
-    console.log(`✅ Background downloaded (${buffer.length} bytes)`);
+    const buffer = await response.arrayBuffer();
+    fs.writeFileSync(tempBgPath, Buffer.from(buffer));
+    console.log(`✅ Background downloaded (${buffer.byteLength} bytes)`);
 
     // 2. Buat overlay dengan canvas
     console.log(`🎨 Creating overlay...`);
@@ -93,7 +107,7 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     );
     ctx.restore();
 
-    // Stroke tipis di avatar
+    // Stroke tipis di avatar (efek seperti di Discord)
     ctx.save();
     ctx.beginPath();
     ctx.arc(
@@ -103,28 +117,31 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
       0,
       Math.PI * 2,
     );
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
     ctx.lineWidth = 3;
     ctx.stroke();
     ctx.restore();
 
-    // Shadow untuk teks
-    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-    ctx.shadowBlur = 15;
-    ctx.shadowOffsetX = 4;
-    ctx.shadowOffsetY = 4;
+    // Shadow untuk teks (lebih subtle ala Discord)
+    ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
     ctx.fillStyle = "#ffffff";
 
-    // Title dengan tracking/letter spacing effect
+    // Title - Bold ala Discord
     setFont(ctx, "bold", LAYOUT.title.fontSize);
+    ctx.fillStyle = "#ffffff";
     ctx.fillText(type.toUpperCase(), LAYOUT.title.x, LAYOUT.title.y);
 
-    // Username
-    setFont(ctx, "500", LAYOUT.username.fontSize); // medium weight
+    // Username - Semi bold
+    setFont(ctx, "normal", LAYOUT.username.fontSize);
+    ctx.fillStyle = "#ffffff";
     ctx.fillText(member.user.username, LAYOUT.username.x, LAYOUT.username.y);
 
-    // Subtitle
-    setFont(ctx, "400", LAYOUT.subtitle.fontSize); // normal weight
+    // Subtitle - Regular dengan warna sedikit lebih soft
+    setFont(ctx, "normal", LAYOUT.subtitle.fontSize);
+    ctx.fillStyle = "#e0e0e0"; // Abu-abu muda ala Discord
 
     if (type === "welcome" || type === "goodbye") {
       let serverName = member.guild.name;

@@ -7,11 +7,12 @@ const fetch = (...args) =>
 
 const WIDTH = 600;
 const HEIGHT = 300;
-const AVATAR_SIZE = 128;
 
-// Font stack untuk semua OS (sama dengan di gifService)
-const FONT_STACK =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+// SAME FONT AS DISCORD!
+const DISCORD_FONT =
+  '"Whitney", "Helvetica Neue", "Helvetica", "Arial", "sans-serif"';
+const DISCORD_BOLD =
+  '"Whitney Bold", "Helvetica Neue Bold", "Helvetica Bold", "Arial Bold", "sans-serif"';
 
 // Konfigurasi posisi yang rapi
 const LAYOUT = {
@@ -37,9 +38,20 @@ const LAYOUT = {
   },
 };
 
-// Helper function untuk setting font
+// Helper function untuk setting font ala Discord
 function setFont(ctx, weight, size) {
-  ctx.font = `${weight} ${size}px ${FONT_STACK}`;
+  if (weight === "bold") {
+    ctx.font = `${size}px ${DISCORD_BOLD}`;
+  } else {
+    ctx.font = `${size}px ${DISCORD_FONT}`;
+  }
+
+  // Fallback
+  try {
+    ctx.measureText("Test");
+  } catch {
+    ctx.font = `${size}px "Arial", "sans-serif"`;
+  }
 }
 
 async function generateCard({ member, type, backgroundURL, extra = {} }) {
@@ -138,11 +150,11 @@ async function generateStaticCard(member, type, backgroundURL, extra) {
 }
 
 function drawOverlay(ctx, member, type, extra, avatar) {
-  // Shadow untuk semua teks
-  ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-  ctx.shadowBlur = 15;
-  ctx.shadowOffsetX = 4;
-  ctx.shadowOffsetY = 4;
+  // Shadow ala Discord (subtle)
+  ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetX = 2;
+  ctx.shadowOffsetY = 2;
 
   // Gambar avatar (bulat)
   ctx.save();
@@ -165,7 +177,7 @@ function drawOverlay(ctx, member, type, extra, avatar) {
   );
   ctx.restore();
 
-  // Stroke tipis di avatar
+  // Stroke tipis di avatar (efek seperti di Discord)
   ctx.save();
   ctx.beginPath();
   ctx.arc(
@@ -175,32 +187,32 @@ function drawOverlay(ctx, member, type, extra, avatar) {
     0,
     Math.PI * 2,
   );
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
   ctx.lineWidth = 3;
   ctx.stroke();
   ctx.restore();
 
-  // Title (WELCOME / GOODBYE / CONGRATS)
-  ctx.fillStyle = "#ffffff";
+  // Title - Putih bold
   setFont(ctx, "bold", LAYOUT.title.fontSize);
+  ctx.fillStyle = "#ffffff";
   ctx.fillText(type.toUpperCase(), LAYOUT.title.x, LAYOUT.title.y);
 
-  // Username
-  setFont(ctx, "500", LAYOUT.username.fontSize); // medium weight
+  // Username - Putih semi bold
+  setFont(ctx, "normal", LAYOUT.username.fontSize);
+  ctx.fillStyle = "#ffffff";
   ctx.fillText(member.user.username, LAYOUT.username.x, LAYOUT.username.y);
 
-  // Subtitle (Server / Role)
-  setFont(ctx, "400", LAYOUT.subtitle.fontSize); // normal weight
+  // Subtitle - Abu-abu muda
+  setFont(ctx, "normal", LAYOUT.subtitle.fontSize);
+  ctx.fillStyle = "#e0e0e0";
 
   if (type === "welcome" || type === "goodbye") {
-    // Potong nama server jika terlalu panjang
     let serverName = member.guild.name;
     if (ctx.measureText(serverName).width > 320) {
       serverName = serverName.substring(0, 22) + "...";
     }
     ctx.fillText(`Server: ${serverName}`, LAYOUT.subtitle.x, LAYOUT.subtitle.y);
   } else if (type === "congrats" && extra.roleName) {
-    // Potong nama role jika terlalu panjang
     let roleName = extra.roleName;
     if (ctx.measureText(roleName).width > 320) {
       roleName = roleName.substring(0, 22) + "...";
