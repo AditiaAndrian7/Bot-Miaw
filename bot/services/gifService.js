@@ -24,7 +24,7 @@ if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 const WIDTH = 600;
 const HEIGHT = 300;
 
-// Layout yang rapi
+// LAYOUT
 const LAYOUT = {
   avatar: { x: 40, y: HEIGHT / 2 - 60, size: 120 },
   title: { x: 180, y: HEIGHT / 2 - 45, fontSize: 36 },
@@ -32,139 +32,32 @@ const LAYOUT = {
   subtitle: { x: 180, y: HEIGHT / 2 + 45, fontSize: 22 },
 };
 
-// Fungsi untuk render teks sebagai PATH (tidak butuh font)
-function drawTextAsPath(ctx, text, x, y, fontSize, isBold = false) {
-  // Simpan state
+// FUNGSI RENDER TEKS DENGAN DUPLICATE (PASTI KELIATAN)
+function renderText(ctx, text, x, y, fontSize, isBold = false) {
   ctx.save();
 
-  // Pindah ke posisi
-  ctx.translate(x, y);
+  // Set font - pake font default canvas yang pasti ada
+  ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px "sans-serif"`;
 
-  // Scale berdasarkan font size
-  ctx.scale(0.8, 1); // Sedikit kompresi horizontal biar lebih aesthetic
+  // Shadow biar kebaca
+  ctx.shadowColor = "black";
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetX = 3;
+  ctx.shadowOffsetY = 3;
 
-  // Warna putih dengan stroke hitam (biar kebaca di background apapun)
+  // Fill putih
   ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "#000000";
-  ctx.lineWidth = fontSize / 15;
+  ctx.fillText(text, x, y);
 
-  // Gambar setiap huruf sebagai path sederhana
-  // Ini adalah path untuk huruf-huruf dasar (simplified)
-  const chars = text.split("");
-  let cursorX = 0;
+  // Reset shadow sedikit untuk outline kedua
+  ctx.shadowBlur = 5;
+  ctx.shadowOffsetX = 1;
+  ctx.shadowOffsetY = 1;
 
-  chars.forEach((char, index) => {
-    ctx.save();
-    ctx.translate(cursorX, 0);
-
-    // Render huruf berdasarkan karakter
-    renderChar(ctx, char, fontSize, isBold);
-
-    ctx.restore();
-
-    // Lebar huruf (approximation)
-    cursorX += fontSize * 0.6;
-  });
+  // Fill lagi biar lebih tebal
+  ctx.fillText(text, x, y);
 
   ctx.restore();
-}
-
-// Fungsi render karakter sederhana
-function renderChar(ctx, char, size, isBold) {
-  const s = size / 10; // scale factor
-
-  ctx.beginPath();
-
-  switch (char.toUpperCase()) {
-    case "W":
-      ctx.moveTo(0, -size);
-      ctx.lineTo(s * 3, size / 2);
-      ctx.lineTo(s * 6, -size);
-      ctx.lineTo(s * 9, size / 2);
-      ctx.lineTo(s * 12, -size);
-      break;
-
-    case "E":
-      ctx.moveTo(0, -size);
-      ctx.lineTo(0, size / 2);
-      ctx.lineTo(s * 8, size / 2);
-      ctx.moveTo(0, -size / 4);
-      ctx.lineTo(s * 6, -size / 4);
-      ctx.moveTo(0, -size);
-      ctx.lineTo(s * 8, -size);
-      break;
-
-    case "L":
-      ctx.moveTo(0, -size);
-      ctx.lineTo(0, size / 2);
-      ctx.lineTo(s * 8, size / 2);
-      break;
-
-    case "C":
-      ctx.moveTo(s * 8, -size);
-      ctx.lineTo(0, -size);
-      ctx.lineTo(0, size / 2);
-      ctx.lineTo(s * 8, size / 2);
-      break;
-
-    case "O":
-      ctx.moveTo(0, -size);
-      ctx.lineTo(s * 8, -size);
-      ctx.lineTo(s * 8, size / 2);
-      ctx.lineTo(0, size / 2);
-      ctx.closePath();
-      break;
-
-    case "M":
-      ctx.moveTo(0, -size);
-      ctx.lineTo(0, size / 2);
-      ctx.lineTo(s * 4, 0);
-      ctx.lineTo(s * 8, size / 2);
-      ctx.lineTo(s * 8, -size);
-      break;
-
-    default:
-      // Default rectangle untuk huruf lain
-      ctx.rect(0, -size, s * 6, size * 1.5);
-  }
-
-  // Fill dan stroke
-  if (isBold) {
-    ctx.lineWidth = size / 8;
-  }
-  ctx.stroke();
-  ctx.fill();
-
-  // Tambah bold dengan stroke kedua
-  if (isBold) {
-    ctx.stroke();
-  }
-}
-
-// Fungsi untuk render teks biasa dengan fallback
-function drawText(
-  ctx,
-  text,
-  x,
-  y,
-  fontSize,
-  isBold = false,
-  color = "#ffffff",
-) {
-  try {
-    // Coba dengan font normal dulu
-    ctx.font = `${isBold ? "bold" : "normal"} ${fontSize}px "Arial", "sans-serif"`;
-    ctx.fillStyle = color;
-    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 3;
-    ctx.shadowOffsetY = 3;
-    ctx.fillText(text, x, y);
-  } catch (err) {
-    // Fallback ke path rendering
-    console.log(`⚠️ Font error, using path rendering for: ${text}`);
-    drawTextAsPath(ctx, text, x, y, fontSize, isBold);
-  }
 }
 
 async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
@@ -219,7 +112,7 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     );
     ctx.restore();
 
-    // Stroke tipis di avatar
+    // Stroke avatar
     ctx.save();
     ctx.beginPath();
     ctx.arc(
@@ -229,50 +122,54 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
       0,
       Math.PI * 2,
     );
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 3;
     ctx.stroke();
     ctx.restore();
 
-    // Title (WELCOME)
-    drawText(ctx, type.toUpperCase(), LAYOUT.title.x, LAYOUT.title.y, 36, true);
-
-    // Username
-    drawText(
+    // RENDER TEXT PAKE FUNGSI BARU
+    renderText(
+      ctx,
+      type.toUpperCase(),
+      LAYOUT.title.x,
+      LAYOUT.title.y,
+      36,
+      true,
+    );
+    renderText(
       ctx,
       member.user.username,
       LAYOUT.username.x,
       LAYOUT.username.y,
       28,
-      false,
     );
 
-    // Subtitle
     if (type === "welcome" || type === "goodbye") {
-      let serverName = member.guild.name;
-      drawText(
+      renderText(
         ctx,
-        `Server: ${serverName}`,
+        `Server: ${member.guild.name}`,
         LAYOUT.subtitle.x,
         LAYOUT.subtitle.y,
         22,
-        false,
-        "#e0e0e0",
       );
     } else if (type === "congrats" && extra.roleName) {
-      drawText(
+      renderText(
         ctx,
         `Role baru: ${extra.roleName}`,
         LAYOUT.subtitle.x,
         LAYOUT.subtitle.y,
         22,
-        false,
-        "#e0e0e0",
       );
     }
 
     // Simpan overlay
     const overlayBuffer = canvas.toBuffer("image/png");
+
+    // DEBUG: Simpan overlay buat dicek
+    const debugPath = path.join(TEMP_DIR, `debug_${Date.now()}.png`);
+    fs.writeFileSync(debugPath, overlayBuffer);
+    console.log(`🔍 Debug overlay saved: ${debugPath}`);
+
     fs.writeFileSync(tempOverlayPath, overlayBuffer);
     console.log(`✅ Overlay created`);
 
@@ -301,12 +198,9 @@ async function generateGifWithFFmpeg(member, type, backgroundURL, extra = {}) {
     const resultBuffer = fs.readFileSync(outputPath);
     console.log(`✅ GIF generated: ${resultBuffer.length} bytes`);
 
-    if (resultBuffer.length > 25 * 1024 * 1024) {
-      throw new Error("Ukuran file terlalu besar (>25MB)");
-    }
-
     return resultBuffer;
   } finally {
+    // Hapus file temporary (kecuali debug)
     [tempBgPath, tempOverlayPath, outputPath].forEach((f) => {
       if (fs.existsSync(f)) {
         try {
