@@ -19,8 +19,7 @@ const path = require("path");
 // Beri tahu @discordjs/voice lokasi FFmpeg
 process.env.FFMPEG_PATH = pathToFfmpeg;
 
-// Path ke binary yt-dlp (otomatis menyesuaikan OS)
-// Dari services (bot/services) naik 2 level ke root, lalu masuk folder bin
+// Path ke binary yt-dlp
 const YT_DLP_PATH = path.join(
   __dirname,
   "..",
@@ -29,59 +28,189 @@ const YT_DLP_PATH = path.join(
   process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp",
 );
 
-// Fungsi untuk memastikan binary bisa dieksekusi
-async function ensureBinaryExecutable() {
-  if (!fs.existsSync(YT_DLP_PATH)) {
-    console.log("⚠️ Binary tidak ditemukan di:", YT_DLP_PATH);
-    return false;
-  }
-
-  try {
-    // Coba jalankan --version untuk test
-    await execPromise(`"${YT_DLP_PATH}" --version`);
-    console.log("✅ Binary sudah bisa dieksekusi");
-    return true;
-  } catch (err) {
-    console.log("⚠️ Mencoba memberi izin eksekusi...");
-    try {
-      // Untuk Linux/Railway (chmod)
-      if (process.platform !== "win32") {
-        await execPromise(`chmod +x "${YT_DLP_PATH}"`);
-        console.log("✅ Izin eksekusi diberikan");
-
-        // Verifikasi lagi
-        await execPromise(`"${YT_DLP_PATH}" --version`);
-        return true;
-      } else {
-        // Di Windows tidak perlu chmod
-        console.log("⚠️ Di Windows, cek manual apakah file bisa dijalankan");
-        return false;
-      }
-    } catch (chmodErr) {
-      console.error("❌ Gagal memberi izin:", chmodErr.message);
-      return false;
-    }
-  }
-}
-
 // Map untuk menyimpan antrian per guild
 const guildQueues = new Map();
 
-/* ============================= */
-/* SEARCH YOUTUBE (menggunakan play-dl) */
-/* ============================= */
-async function searchYoutube(keyword) {
-  const results = await play.search(keyword, { limit: 1 });
-  if (!results || results.length === 0) {
-    throw new Error("Lagu tidak ditemukan di YouTube");
-  }
+// ============================================
+// SOUNDCLOUD CLIENT ID
+// ============================================
+const SOUNDCLOUD_CLIENT_ID = "EnTrn2ZjaZXfOU7iRsFicZvTOi1Pl3rK";
+let soundcloudReady = false;
+let soundcloudInitPromise = null;
 
-  const video = results[0];
-  return {
-    title: video.title,
-    url: video.url,
-    id: video.id,
-  };
+async function initSoundCloud() {
+  try {
+    console.log("Initializing SoundCloud...");
+
+    play.setToken({
+      soundcloud: {
+        client_id: SOUNDCLOUD_CLIENT_ID,
+      },
+    });
+
+    const test = await play
+      .search("test", {
+        source: { soundcloud: "tracks" },
+        limit: 1,
+      })
+      .catch(() => null);
+
+    if (test && test.length > 0) {
+      console.log(`SoundCloud ready (ID: ${SOUNDCLOUD_CLIENT_ID})`);
+      soundcloudReady = true;
+      return true;
+    } else {
+      throw new Error("SoundCloud test failed");
+    }
+  } catch (err) {
+    console.warn("SoundCloud unavailable, using YouTube only");
+    soundcloudReady = false;
+    return false;
+  }
+}
+
+soundcloudInitPromise = initSoundCloud();
+
+/* ============================= */
+/* SEARCH LAGU */
+/* ============================= */
+async function searchSong(keyword) {
+  try {
+    console.log(`🔍 Searching: ${keyword}`);
+
+    if (soundcloudInitPromise) {
+      await soundcloudInitPromise;
+    }
+
+    // Cek URL YouTube
+    if (play.yt_validate(keyword) === "video") {
+      const info = await play.video_info(keyword);
+      return {
+        title: info.video_details.title,
+        url: info.video_details.url,
+        duration: info.video_details.durationInSec,
+        thumbnail: info.video_details.thumbnails[0]?.url || null,
+        source: "youtube",
+      };
+    }
+
+    // Cek URL SoundCloud
+    if (play.so_validate(keyword) === "track") {
+      if (soundcloudReady) {
+        const info = await play.soundcloud(keyword);
+        return {
+          title: info.name,
+          url: info.url,
+          duration: info.durationInSec,
+          thumbnail: info.thumbnail,
+          source: "soundcloud",
+        };
+      }
+    }
+
+    // Search SoundCloud
+    if (soundcloudReady) {
+      try {
+        const scResults = await play.search(keyword, {
+          limit: 1,
+          source: { soundcloud: "tracks" },
+        });
+
+        if (scResults.length > 0) {
+          console.log("Found on SoundCloud");
+          return {
+            title: scResults[0].name,
+            url: scResults[0].url,
+            duration: scResults[0].durationInSec,
+            thumbnail: scResults[0].thumbnail,
+            source: "soundcloud",
+          };
+        }
+      } catch (scErr) {
+        console.log("SoundCloud search failed, trying YouTube...");
+      }
+    }
+
+    // Fallback YouTube
+    const ytResults = await play.search(keyword, {
+      limit: 1,
+      source: { youtube: "video" },
+    });
+
+    if (ytResults.length > 0) {
+      console.log("Found on YouTube");
+      return {
+        title: ytResults[0].title,
+        url: ytResults[0].url,
+        duration: ytResults[0].durationInSec,
+        thumbnail: ytResults[0].thumbnails[0]?.url || null,
+        source: "youtube",
+      };
+    }
+
+    throw new Error("Lagu tidak ditemukan");
+  } catch (err) {
+    console.error("Search error:", err);
+    throw err;
+  }
+}
+
+/* ============================= */
+/* GET AUDIO STREAM */
+/* ============================= */
+async function getAudioStream(song) {
+  try {
+    console.log(`Streaming from ${song.source}...`);
+
+    if (song.source === "soundcloud") {
+      if (!soundcloudReady) throw new Error("SoundCloud not ready");
+      const stream = await play.stream(song.url);
+      return {
+        stream: stream.stream,
+        type: stream.type,
+        method: "soundcloud",
+      };
+    } else {
+      // YouTube - yt-dlp priority
+      if (fs.existsSync(YT_DLP_PATH)) {
+        try {
+          const { stdout } = await execPromise(
+            `"${YT_DLP_PATH}" -f bestaudio --get-url "${song.url}"`,
+            { timeout: 30000 },
+          );
+          const audioUrl = stdout.trim();
+
+          const response = await fetch(audioUrl, {
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+              Accept: "*/*",
+            },
+          });
+
+          if (response.ok) {
+            return {
+              stream: response.body,
+              method: "yt-dlp",
+            };
+          }
+        } catch (err) {
+          console.log("yt-dlp failed, trying play-dl...");
+        }
+      }
+
+      // Fallback play-dl
+      const stream = await play.stream(song.url);
+      return {
+        stream: stream.stream,
+        type: stream.type,
+        method: "play-dl",
+      };
+    }
+  } catch (err) {
+    console.error("Stream error:", err);
+    throw err;
+  }
 }
 
 /* ============================= */
@@ -89,19 +218,22 @@ async function searchYoutube(keyword) {
 /* ============================= */
 async function playSong(guild, member, keyword) {
   if (!member.voice.channel) {
-    throw new Error("Kamu harus ada di voice channel!");
+    throw new Error("Kamu harus join voice channel dulu!");
   }
 
-  const song = await searchYoutube(keyword);
+  console.log(`Play: ${member.user.tag} -> ${keyword}`);
 
+  const song = await searchSong(keyword);
   let queue = guildQueues.get(guild.id);
 
   if (!queue) {
+    console.log(`Connecting to ${guild.name}...`);
+
     const connection = joinVoiceChannel({
       channelId: member.voice.channel.id,
       guildId: guild.id,
       adapterCreator: guild.voiceAdapterCreator,
-      selfDeaf: false,
+      selfDeaf: true,
     });
 
     await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
@@ -118,48 +250,49 @@ async function playSong(guild, member, keyword) {
       connection,
       player,
       songs: [],
+      textChannel: member.channel,
     };
 
     guildQueues.set(guild.id, queue);
 
-    // Event ketika lagu selesai
     player.on(AudioPlayerStatus.Idle, async () => {
       queue.songs.shift();
       if (queue.songs.length > 0) {
         await playNext(guild.id);
       } else {
-        // Hancurkan koneksi hanya jika masih ada dan belum dihancurkan
-        if (
-          queue.connection &&
-          queue.connection.state.status !== VoiceConnectionStatus.Destroyed
-        ) {
-          queue.connection.destroy();
-        }
-        guildQueues.delete(guild.id);
+        setTimeout(() => {
+          const q = guildQueues.get(guild.id);
+          if (q && q.songs.length === 0) {
+            q.connection?.destroy();
+            guildQueues.delete(guild.id);
+          }
+        }, 60000);
       }
     });
 
-    // Event error pada player
     player.on("error", (err) => {
-      console.error("❌ Audio Player Error:", err);
-    });
-
-    // Pantau perubahan state untuk debugging
-    player.on("stateChange", (oldState, newState) => {
-      console.log(`🎵 Player state: ${oldState.status} -> ${newState.status}`);
+      console.error("Player error:", err);
+      playNext(guild.id);
     });
   }
 
-  queue.songs.push(song);
+  queue.songs.push({
+    ...song,
+    requestedBy: member.user.id,
+  });
+
   if (queue.songs.length === 1) {
     await playNext(guild.id);
+  } else {
+    console.log(`Added to queue (position ${queue.songs.length})`);
   }
 
-  return song.title;
+  const sourceEmoji = song.source === "soundcloud" ? "🔊" : "▶️";
+  return `${sourceEmoji} **${song.title}**`;
 }
 
 /* ============================= */
-/* PLAY NEXT (dengan prioritas yt-dlp binary) */
+/* PLAY NEXT */
 /* ============================= */
 async function playNext(guildId) {
   const queue = guildQueues.get(guildId);
@@ -167,141 +300,56 @@ async function playNext(guildId) {
 
   const song = queue.songs[0];
 
-  // Validasi dan konstruksi URL
-  let videoUrl;
-  if (song.id) {
-    videoUrl = `https://www.youtube.com/watch?v=${song.id}`;
-  } else if (
-    song.url &&
-    typeof song.url === "string" &&
-    song.url.startsWith("http")
-  ) {
-    videoUrl = song.url.trim();
-  } else {
-    console.error("Invalid song URL/ID, removing from queue:", song);
-    queue.songs.shift();
-    return playNext(guildId);
-  }
-
   try {
     console.log("=================================");
-    console.log("DEBUG START");
-    console.log("Song URL:", videoUrl);
+    console.log(`Now Playing: ${song.title}`);
+    console.log(`Source: ${song.source}`);
+    console.log(`URL: ${song.url}`);
 
-    // ===== METODE UTAMA: yt-dlp binary =====
-    if (fs.existsSync(YT_DLP_PATH)) {
-      // Pastikan binary bisa dieksekusi
-      const isExecutable = await ensureBinaryExecutable();
+    const { stream, method } = await getAudioStream(song);
+    console.log(`Stream: ${method}`);
 
-      if (isExecutable) {
-        try {
-          console.log("📁 Menggunakan yt-dlp binary di:", YT_DLP_PATH);
-
-          const { stdout } = await execPromise(
-            `"${YT_DLP_PATH}" -f bestaudio --get-url "${videoUrl}"`,
-          );
-          const audioUrl = stdout.trim();
-
-          console.log("✅ yt-dlp URL obtained");
-
-          // Fetch URL dengan header yang meniru browser
-          const response = await fetch(audioUrl, {
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              Accept: "*/*",
-              Connection: "keep-alive",
-              Referer: "https://www.youtube.com/",
-            },
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          // Buat resource audio dengan inputType 'arbitrary' agar FFmpeg menangani konversi
-          const resource = createAudioResource(response.body, {
-            inputType: "arbitrary",
-          });
-
-          resource.playStream.on("error", (err) => {
-            console.error("❌ Resource stream error (yt-dlp):", err);
-          });
-
-          queue.player.play(resource);
-          console.log("✅ Playing using yt-dlp binary + fetch");
-          console.log("=================================");
-          return; // Berhasil, keluar
-        } catch (ytDlpErr) {
-          console.log("⚠️ yt-dlp binary failed:", ytDlpErr.message);
-          // Lanjut ke metode cadangan
-        }
-      } else {
-        console.log("⚠️ Binary tidak bisa dieksekusi, lanjut fallback");
-      }
-    } else {
-      console.log("⚠️ yt-dlp binary tidak ditemukan di:", YT_DLP_PATH);
-    }
-
-    // ===== METODE CADANGAN: play-dl video_info + fetch =====
-    console.log("📁 Menggunakan fallback play-dl...");
-    const info = await play.video_info(videoUrl);
-    console.log("✅ video_info OK");
-    console.log("Video title:", info.video_details?.title);
-    console.log("Available formats:", info.format.length);
-
-    // Tampilkan sample format untuk debugging
-    console.log("Sample formats (first 5):");
-    info.format.slice(0, 5).forEach((f, i) => {
-      console.log(`Format ${i}:`, {
-        itag: f.itag,
-        mimeType: f.mimeType,
-        url: !!f.url,
-        bitrate: f.bitrate,
-      });
-    });
-
-    // Pilih format dengan URL (prioritas audio)
-    let format = info.format.find(
-      (f) => f.url && (f.mimeType?.includes("audio") || f.hasAudio === true),
-    );
-    if (!format) format = info.format.find((f) => f.url);
-    if (!format) throw new Error("Tidak ada format dengan URL.");
-
-    console.log(
-      "✅ Selected format: itag=" +
-        format.itag +
-        ", mimeType=" +
-        format.mimeType,
-    );
-    console.log("🔗 URL:", format.url);
-
-    // Fetch URL dengan header
-    const response = await fetch(format.url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        Connection: "keep-alive",
-        Referer: "https://www.youtube.com/",
-      },
-    });
-
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-    const resource = createAudioResource(response.body, {
-      inputType: "arbitrary",
-    });
-    resource.playStream.on("error", (err) => {
-      console.error("❌ Resource stream error (fetch):", err);
+    const resource = createAudioResource(stream, {
+      inputType: method === "soundcloud" ? undefined : "arbitrary",
     });
 
     queue.player.play(resource);
-    console.log("✅ Playing using fallback (play-dl)");
+
+    if (queue.textChannel) {
+      const minutes = Math.floor(song.duration / 60);
+      const seconds = song.duration % 60;
+      const durationStr = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+      const sourceEmoji = song.source === "soundcloud" ? "🔊" : "▶️";
+
+      queue.textChannel
+        .send({
+          embeds: [
+            {
+              color: song.source === "soundcloud" ? 0xff7700 : 0xff0000,
+              title: `${sourceEmoji} Now Playing`,
+              description: `[${song.title}](${song.url})`,
+              thumbnail: { url: song.thumbnail },
+              fields: [
+                {
+                  name: "Duration",
+                  value: durationStr,
+                  inline: true,
+                },
+                {
+                  name: "Requested by",
+                  value: `<@${song.requestedBy}>`,
+                  inline: true,
+                },
+              ],
+            },
+          ],
+        })
+        .catch(() => {});
+    }
+
     console.log("=================================");
   } catch (err) {
-    console.error("❌ All methods failed:", err);
+    console.error("Playback failed:", err);
     queue.songs.shift();
     await playNext(guildId);
   }
@@ -312,41 +360,47 @@ async function playNext(guildId) {
 /* ============================= */
 function pause(guildId) {
   const queue = guildQueues.get(guildId);
-  if (queue) queue.player.pause();
+  if (queue) {
+    queue.player.pause();
+    console.log(`Paused in guild ${guildId}`);
+  }
 }
 
 function resume(guildId) {
   const queue = guildQueues.get(guildId);
-  if (queue) queue.player.unpause();
+  if (queue) {
+    queue.player.unpause();
+    console.log(`Resumed in guild ${guildId}`);
+  }
 }
 
 function stop(guildId) {
   const queue = guildQueues.get(guildId);
   if (!queue) return;
 
-  // Hentikan pemutaran dan kosongkan antrian
+  console.log(`Stopping in guild ${guildId}`);
   queue.songs = [];
   queue.player.stop();
-
-  // Hancurkan koneksi hanya jika masih ada dan belum dihancurkan
-  if (
-    queue.connection &&
-    queue.connection.state.status !== VoiceConnectionStatus.Destroyed
-  ) {
-    queue.connection.destroy();
-  }
-
+  queue.connection?.destroy();
   guildQueues.delete(guildId);
 }
 
 function skip(guildId) {
   const queue = guildQueues.get(guildId);
-  if (queue) queue.player.stop(); // stop akan memicu Idle, lalu next lagu
+  if (queue) {
+    console.log(`Skipping in guild ${guildId}`);
+    queue.player.stop();
+  }
 }
 
 function getQueue(guildId) {
   const queue = guildQueues.get(guildId);
   return queue ? queue.songs : [];
+}
+
+function getCurrentSong(guildId) {
+  const queue = guildQueues.get(guildId);
+  return queue?.songs[0] || null;
 }
 
 module.exports = {
@@ -356,4 +410,5 @@ module.exports = {
   stop,
   skip,
   getQueue,
+  getCurrentSong,
 };

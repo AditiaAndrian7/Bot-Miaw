@@ -466,45 +466,41 @@ client.on("messageCreate", async (message) => {
 
       if (!config.tones[selected]) {
         return message.reply(
-          "❌ Tone tidak tersedia. Pilih: lembut, tegas, pemarah, santai",
+          "Tone tidak tersedia. Pilih: lembut, tegas, pemarah, santai",
         );
       }
 
       userTones[userId] = selected;
       return message.reply(`🎭 Tone diubah ke: **${selected}**`);
     }
+    /* ======================================
+      MUSIC SECTION
+    ====================================== */
 
-    /* ===== MUSIC ===== */
     if (command === "music") {
       const subCommand = args[0]?.toLowerCase();
-      const keyword = args.slice(1).join(" ");
+      const query = args.slice(1).join(" ");
 
       const musicService = require("./services/musicService");
 
       try {
         switch (subCommand) {
           case "play":
-            if (!keyword)
+            if (!query)
               return message.reply(
-                "🎵 Masukkan judul lagu!\nContoh: `!music play tak ingin usai`",
+                "Masukkan judul lagu!\nContoh: `!music play about you`",
               );
 
-            const currentQueue = musicService.getQueue(message.guild.id);
-            const wasEmpty = currentQueue.length === 0;
+            if (!message.member.voice.channel) {
+              return message.reply("Kamu harus join voice channel dulu!");
+            }
 
-            const songTitle = await musicService.playSong(
+            const result = await musicService.playSong(
               message.guild,
               message.member,
-              keyword,
+              query,
             );
-
-            if (wasEmpty) {
-              return message.reply(`🎶 **Memutar:** ${songTitle}`);
-            } else {
-              return message.reply(
-                `📥 **Ditambahkan ke antrian:** ${songTitle}`,
-              );
-            }
+            return message.reply(result);
 
           case "pause":
             musicService.pause(message.guild.id);
@@ -523,20 +519,21 @@ client.on("messageCreate", async (message) => {
             return message.reply("⏭️ Lagu dilewati.");
 
           case "queue":
-            const queueList = musicService.getQueue(message.guild.id);
-            if (!queueList.length) return message.reply("📭 Antrian kosong.");
+            const queue = musicService.getQueue(message.guild.id);
+            if (!queue.length) return message.reply("📭 Antrian kosong.");
 
-            let queueText = "🎵 **Antrian:**\n";
-            queueList.forEach((song, i) => {
-              queueText += `${i + 1}. ${song.title} - <@${song.requestedBy}>\n`;
+            let queueText = "**Antrian:**\n";
+            queue.forEach((song, i) => {
+              const minutes = Math.floor(song.duration / 60);
+              const seconds = song.duration % 60;
+              queueText += `${i + 1}. ${song.title} (${minutes}:${seconds.toString().padStart(2, "0")}) - <@${song.requestedBy}>\n`;
             });
-
             return message.reply(queueText);
 
           default:
             return message.reply(
               "🎵 **Music Commands:**\n" +
-                "`!music play [judul]` - Putar lagu\n" +
+                "`!music play [judul]` - Putar lagu (YouTube/SoundCloud)\n" +
                 "`!music pause` - Jeda\n" +
                 "`!music resume` - Lanjut\n" +
                 "`!music skip` - Lewati\n" +
@@ -546,7 +543,7 @@ client.on("messageCreate", async (message) => {
         }
       } catch (err) {
         console.error("Music Error:", err);
-        return message.reply(`❌ Error: ${err.message}`);
+        return message.reply(`Error: ${err.message}`);
       }
     }
 
