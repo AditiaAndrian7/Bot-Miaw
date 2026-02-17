@@ -474,7 +474,7 @@ client.on("messageCreate", async (message) => {
       return message.reply(`🎭 Tone diubah ke: **${selected}**`);
     }
     /* ======================================
-      MUSIC SECTION
+    MUSIC SECTION
     ====================================== */
 
     if (command === "music") {
@@ -495,55 +495,141 @@ client.on("messageCreate", async (message) => {
               return message.reply("Kamu harus join voice channel dulu!");
             }
 
+            // Cek apakah ada lagu yang sedang diputar
+            const currentSong = musicService.getCurrentSong(message.guild.id);
+
             const result = await musicService.playSong(
               message.guild,
               message.member,
               query,
             );
-            return message.reply(result);
+
+            // Kalau ada lagu yang sedang diputar, kasih notifikasi queue
+            if (currentSong) {
+              const queueLength = musicService.getQueue(
+                message.guild.id,
+              ).length;
+              return message.reply(
+                `📥 **Lagu ditambahkan ke antrian**\n` +
+                  `Posisi: **${queueLength}** dalam antrian\n` +
+                  `${result}`,
+              );
+            } else {
+              return message.reply(result);
+            }
 
           case "pause":
+            const pauseQueue = musicService.getQueue(message.guild.id);
+            if (!pauseQueue.length) {
+              return message.reply("📭 Tidak ada lagu yang sedang diputar.");
+            }
             musicService.pause(message.guild.id);
-            return message.reply("⏸️ Musik dijeda.");
+            return message.reply(
+              "⏸️ **Musik dijeda**\nGunakan `!music resume` untuk melanjutkan.",
+            );
 
           case "resume":
+            const resumeQueue = musicService.getQueue(message.guild.id);
+            if (!resumeQueue.length) {
+              return message.reply("📭 Tidak ada lagu yang sedang diputar.");
+            }
             musicService.resume(message.guild.id);
-            return message.reply("▶️ Musik dilanjutkan.");
+            return message.reply("▶️ **Musik dilanjutkan**");
 
           case "stop":
+            const stopQueue = musicService.getQueue(message.guild.id);
+            if (!stopQueue.length) {
+              return message.reply("📭 Antrian sudah kosong.");
+            }
             musicService.stop(message.guild.id);
-            return message.reply("⏹️ Musik dihentikan.");
+            return message.reply(
+              "⏹️ **Musik dihentikan**\nAntrian telah dikosongkan.",
+            );
 
           case "skip":
+            const skipQueue = musicService.getQueue(message.guild.id);
+            if (!skipQueue.length) {
+              return message.reply("📭 Tidak ada lagu untuk dilewati.");
+            }
+            const skippedSong = musicService.getCurrentSong(message.guild.id);
             musicService.skip(message.guild.id);
-            return message.reply("⏭️ Lagu dilewati.");
+            return message.reply(
+              `⏭️ **Lagu dilewati:** ${skippedSong?.title || "Unknown"}`,
+            );
 
           case "queue":
             const queue = musicService.getQueue(message.guild.id);
-            if (!queue.length) return message.reply("📭 Antrian kosong.");
+            const current = musicService.getCurrentSong(message.guild.id);
 
-            let queueText = "**Antrian:**\n";
-            queue.forEach((song, i) => {
-              const minutes = Math.floor(song.duration / 60);
-              const seconds = song.duration % 60;
-              queueText += `${i + 1}. ${song.title} (${minutes}:${seconds.toString().padStart(2, "0")}) - <@${song.requestedBy}>\n`;
-            });
+            if (!queue.length && !current) {
+              return message.reply(
+                "**Antrian kosong**\nGunakan `!music play [judul]` untuk memutar lagu.",
+              );
+            }
+
+            let queueText = "";
+
+            // Lagu yang sedang diputar
+            if (current) {
+              const currentMinutes = Math.floor(current.duration / 60);
+              const currentSeconds = current.duration % 60;
+              queueText += `**🎵 Sedang Diputar:**\n`;
+              queueText += `${current.title} (${currentMinutes}:${currentSeconds.toString().padStart(2, "0")}) - <@${current.requestedBy}>\n\n`;
+            }
+
+            // Antrian
+            if (queue.length > 0) {
+              queueText += `**📋 Antrian (${queue.length} lagu):**\n`;
+              queue.forEach((song, i) => {
+                const minutes = Math.floor(song.duration / 60);
+                const seconds = song.duration % 60;
+                queueText += `${i + 1}. ${song.title} (${minutes}:${seconds.toString().padStart(2, "0")}) - <@${song.requestedBy}>\n`;
+              });
+            }
+
             return message.reply(queueText);
+
+          case "now":
+          case "current":
+            const currentNow = musicService.getCurrentSong(message.guild.id);
+            if (!currentNow) {
+              return message.reply("📭 Tidak ada lagu yang sedang diputar.");
+            }
+            const nowMinutes = Math.floor(currentNow.duration / 60);
+            const nowSeconds = currentNow.duration % 60;
+            return message.reply(
+              `🎵 **Sedang Diputar:**\n` +
+                `${currentNow.title} (${nowMinutes}:${nowSeconds.toString().padStart(2, "0")})\n` +
+                `Diminta oleh: <@${currentNow.requestedBy}>`,
+            );
 
           default:
             return message.reply(
               "🎵 **Music Commands:**\n" +
-                "`!music play [judul]` - Putar lagu (YouTube/SoundCloud)\n" +
-                "`!music pause` - Jeda\n" +
-                "`!music resume` - Lanjut\n" +
-                "`!music skip` - Lewati\n" +
-                "`!music stop` - Berhenti\n" +
-                "`!music queue` - Antrian",
+                "`!music play [judul]` - Putar lagu dari SoundCloud\n" +
+                "`!music pause` - Jeda lagu\n" +
+                "`!music resume` - Lanjutkan lagu\n" +
+                "`!music skip` - Lewati lagu\n" +
+                "`!music stop` - Berhenti dan kosongkan antrian\n" +
+                "`!music queue` - Lihat antrian\n" +
+                "`!music now` - Lihat lagu yang sedang diputar\n" +
+                "\n**Tips:** YouTube saat ini diblokir, gunakan judul lagu biasa dan bot akan mencari di SoundCloud!",
             );
         }
       } catch (err) {
         console.error("Music Error:", err);
-        return message.reply(`Error: ${err.message}`);
+
+        // Handle specific errors
+        if (err.message.includes("SoundCloud")) {
+          return message.reply(
+            "❌ **SoundCloud Error**\n" +
+              "Lagu tidak ditemukan di SoundCloud. Coba judul lain atau cek ejaan.",
+          );
+        } else if (err.message.includes("voice channel")) {
+          return message.reply("Kamu harus join voice channel dulu!");
+        } else {
+          return message.reply(`**Error:** ${err.message}`);
+        }
       }
     }
 
