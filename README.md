@@ -5,7 +5,7 @@ Bot Discord dengan fitur AI, PDF, Image, dan Memory services.
 ## 📋 Prasyarat
 
 Sebelum memulai, pastikan Anda telah menginstal:
-- [Node.js](https://nodejs.org/) (versi 16 atau lebih baru)
+- [Node.js](https://nodejs.org/) (versi 22 atau lebih baru)
 
 ## 🚀 Cara Menjalankan Project
 
@@ -129,4 +129,5 @@ Jika ada pertanyaan atau kendala, silakan hubungi:
 **Selamat mencoba!** 🎉
 
 ---
+
 
