@@ -75,7 +75,7 @@ BOT DISCORD CONTROL/
 │
 ├── bot/                           # Folder utama bot
 │   ├── fonts/                      # File font untuk generate gambar
-│   │   └── services/               # SERVICES - LANGSUNG DI DALAM FONTS?
+│   ├── services/               # SERVICES - LANGSUNG DI DALAM FONTS?
 │   │       ├── aiService.js        # Service untuk AI
 │   │       ├── gifService.js       # Service untuk GIF
 │   │       ├── imageService.js     # Service untuk gambar
@@ -136,6 +136,7 @@ Jika ada pertanyaan atau kendala, silakan hubungi:
 **Selamat mencoba!** 🎉
 
 ---
+
 
 
 
