@@ -74,20 +74,27 @@ BOT DISCORD CONTROL/
 │       └── yt-dlp.exe            # Untuk unduh video/audio
 │
 ├── bot/                           # Folder utama bot
-│   ├── fonts/                     # File font untuk generate gambar
-│   ├── services/                   # Layanan-layanan
-│   │   ├── aiService.js           # Service untuk AI
-│   │   ├── pdfService.js          # Service untuk PDF
-│   │   ├── imageService.js        # Service untuk gambar
-│   │   └── memoryService.js       # Service untuk memory
+│   ├── fonts/                      # File font untuk generate gambar
+│   │   └── services/               # SERVICES - LANGSUNG DI DALAM FONTS?
+│   │       ├── aiService.js        # Service untuk AI
+│   │       ├── gifService.js       # Service untuk GIF
+│   │       ├── imageService.js     # Service untuk gambar
+│   │       ├── memberService.js    # Service untuk member
+│   │       ├── memoryService.js    # Service untuk memory
+│   │       ├── musicService.js     # Service untuk music
+│   │       ├── pdfService.js       # Service untuk PDF
+│   │       └── pptxService.js      # Service untuk PowerPoint
 │   │
-│   ├── utils/                      # Utilitas
-│   │   └── replyHandler.js        # Handler untuk reply
+│   ├── temp/                        # Folder temporary
+│   │   └── music/                   # Sub-folder untuk music
 │   │
-│   ├── temp/                        # Folder temporary (cache, unduhan)
-│   ├── config.js                   # File konfigurasi bot
-│   ├── index.js                     # File utama bot
-│   └── server-channels.json         # Data channel server Discord
+│   ├── utils/                        # Utilitas
+│   │   ├── cardGenerator.js         # Generator kartu/gambar
+│   │   └── replyHandler.js          # Handler untuk reply
+│   │
+│   ├── config.js                     # File konfigurasi bot
+│   ├── index.js                       # File utama bot
+│   └── server-channels.json           # Data channel server Discord
 │
 ├── node_modules/                    # Dependencies
 ├── .env                              # File environment (buat sendiri)
@@ -129,5 +136,6 @@ Jika ada pertanyaan atau kendala, silakan hubungi:
 **Selamat mencoba!** 🎉
 
 ---
+
 
 
