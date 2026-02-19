@@ -30,175 +30,184 @@ function cleanRawText(text) {
 }
 
 /* ================================
-   EXTRACT TITLE
+   GENERATE PDF (FINAL STABLE)
 ================================ */
-function extractTitleAndClean(text) {
-  const lines = text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
+async function generatePDF({ text, username = "User", userId = "unknown" }) {
+  try {
+    const tempPath = ensureTempFolder();
+    const fileName = `makalah_${userId}_${Date.now()}.pdf`;
+    const filePath = path.join(tempPath, fileName);
 
-  let candidates = [];
+    let cleaned = cleanRawText(text);
 
-  for (let line of lines) {
-    const lower = line.toLowerCase();
-    if (lower.startsWith("bab i")) break;
+    const lines = cleaned
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
 
-    if (
-      line === line.toUpperCase() &&
-      line.length > 15 &&
-      !lower.includes("daftar isi") &&
-      !lower.startsWith("bab")
-    ) {
-      candidates.push(line);
+    let detectedTitle = "MAKALAH";
+
+    if (lines.length > 0 && /^[A-Z\s\d.,:()-]+$/.test(lines[0])) {
+      detectedTitle = lines.shift();
     }
-  }
 
-  const detectedTitle =
-    candidates.length > 0
-      ? candidates.sort((a, b) => b.length - a.length)[0]
-      : null;
+    const paragraphs = lines;
 
-  const finalLines = lines.filter(
-    (l) =>
-      !candidates.includes(l) && !l.toLowerCase().includes("makalah akademik"),
-  );
+    const doc = new PDFDocument({
+      size: "A4",
+      margins: { top: 80, bottom: 70, left: 80, right: 80 },
+      bufferPages: true,
+    });
 
-  return {
-    title: detectedTitle,
-    cleanedText: finalLines.join("\n"),
-  };
-}
+    const stream = fs.createWriteStream(filePath);
+    doc.pipe(stream);
 
-/* ================================
-   GENERATE PDF
-================================ */
-async function generatePDF({
-  text,
-  username = "User",
-  userId = "unknown",
-  title = "MAKALAH",
-}) {
-  return new Promise((resolve, reject) => {
-    try {
-      const tempPath = ensureTempFolder();
-      const fileName = `makalah_${userId}_${Date.now()}.pdf`;
-      const filePath = path.join(tempPath, fileName);
+    /* ================= COVER ================= */
 
-      const rawClean = cleanRawText(text);
-      const { title: detectedTitle, cleanedText } =
-        extractTitleAndClean(rawClean);
+    doc.moveDown(6);
 
-      if (detectedTitle) title = detectedTitle;
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(16)
+      .text("MAKALAH", { align: "center" });
+    doc.moveDown(2);
 
-      const paragraphs = cleanedText
-        .split("\n")
-        .map((p) => p.trim())
-        .filter(Boolean);
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(20)
+      .text(detectedTitle.toUpperCase(), { align: "center" });
 
-      const doc = new PDFDocument({
-        size: "A4",
-        margins: { top: 80, bottom: 70, left: 80, right: 80 },
-        bufferPages: true,
-      });
+    doc.moveDown(4);
+    doc.moveDown(8);
 
-      const stream = fs.createWriteStream(filePath);
-      doc.pipe(stream);
+    doc.font("Helvetica").fontSize(12).text("Oleh:", { align: "center" });
+    doc.moveDown(0.5);
 
-      const toc = [];
+    doc.font("Helvetica-Bold").fontSize(14).text(username, { align: "center" });
 
-      /* ================= COVER ================= */
-      doc.moveDown(6);
+    doc.moveDown(6);
 
-      doc
-        .font("Helvetica-Bold")
-        .fontSize(20)
-        .text(title.toUpperCase(), { align: "center" });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(18)
+      .text("KOMUNITAS ARCANEX", { align: "center" });
 
-      doc.moveDown(3);
+    doc.moveDown(0.5);
 
-      doc.font("Helvetica").fontSize(14).text("Disusun Oleh:", {
-        align: "center",
-      });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(18)
+      .text(new Date().getFullYear().toString(), { align: "center" });
 
-      doc.moveDown(0.5);
+    doc.addPage();
 
-      doc.font("Helvetica-Bold").fontSize(14).text(username, {
-        align: "center",
-      });
+    /* ================= TOC ================= */
 
-      doc.moveDown(2);
+    const toc = [];
+    const tocPageIndex = doc.bufferedPageRange().count - 1;
 
-      doc
-        .font("Helvetica")
-        .fontSize(12)
-        .text(new Date().getFullYear().toString(), { align: "center" });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(16)
+      .text("DAFTAR ISI", { align: "center" });
 
-      doc.addPage();
+    doc.moveDown(2);
+    const tocStartY = doc.y;
 
-      /* ================= DAFTAR ISI ================= */
-      const tocPageIndex = doc.bufferedPageRange().count - 1;
+    /* ================= CONTENT ================= */
 
-      doc
-        .font("Helvetica-Bold")
-        .fontSize(16)
-        .text("DAFTAR ISI", { align: "center" });
+    let inDaftarPustaka = false;
 
-      doc.moveDown(2);
+    paragraphs.forEach((para) => {
+      const lower = para.toLowerCase();
 
-      doc.addPage();
+      // ===== ABSTRAK =====
+      if (lower === "abstrak") {
+        doc.addPage();
 
-      /* ================= ISI ================= */
-      paragraphs.forEach((para) => {
-        const lower = para.toLowerCase();
+        toc.push({
+          title: "ABSTRAK",
+          page: doc.bufferedPageRange().count,
+          level: 0,
+        });
 
-        if (lower.includes("daftar isi")) return;
-        if (lower.includes("disusun oleh")) return;
-        if (lower === title.toLowerCase()) return;
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(16)
+          .text("ABSTRAK", { align: "center" });
 
-        if (lower.startsWith("bab")) {
-          doc.addPage();
+        doc.moveDown(2);
+        doc.font("Helvetica").fontSize(12);
 
-          toc.push({
-            title: para.toUpperCase(),
-            page: doc.bufferedPageRange().count,
-            level: 0,
+        inDaftarPustaka = false;
+      }
+
+      // ===== BAB =====
+      else if (lower.startsWith("bab ")) {
+        doc.addPage();
+
+        toc.push({
+          title: para.toUpperCase(),
+          page: doc.bufferedPageRange().count,
+          level: 0,
+        });
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(16)
+          .text(para.toUpperCase(), { align: "center" });
+
+        doc.moveDown(2);
+        doc.font("Helvetica").fontSize(12);
+
+        inDaftarPustaka = false;
+      }
+
+      // ===== SUB BAB (1.1, 2.3, dll) =====
+      else if (/^\d+\.\d+/.test(para)) {
+        toc.push({
+          title: para,
+          page: doc.bufferedPageRange().count,
+          level: 1,
+        });
+
+        doc.moveDown();
+        doc.font("Helvetica-Bold").fontSize(13).text(para);
+        doc.moveDown(0.5);
+        doc.font("Helvetica").fontSize(12);
+      }
+
+      // ===== DAFTAR PUSTAKA =====
+      else if (lower === "daftar pustaka") {
+        doc.addPage();
+
+        toc.push({
+          title: "DAFTAR PUSTAKA",
+          page: doc.bufferedPageRange().count,
+          level: 0,
+        });
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(16)
+          .text("DAFTAR PUSTAKA", { align: "center" });
+
+        doc.moveDown(2);
+        doc.font("Helvetica").fontSize(12);
+
+        inDaftarPustaka = true;
+      }
+
+      // ===== ISI NORMAL =====
+      else {
+        if (inDaftarPustaka) {
+          // APA 7 Hanging Indent
+          doc.text(para, {
+            align: "left",
+            indent: -20,
+            continued: false,
           });
-
-          doc
-            .font("Helvetica-Bold")
-            .fontSize(16)
-            .text(para.toUpperCase(), { align: "center" });
-
-          doc.moveDown(2);
-          doc.font("Helvetica").fontSize(12);
-        } else if (/^\d+\.\d+/.test(para)) {
-          toc.push({
-            title: para,
-            page: doc.bufferedPageRange().count,
-            level: 1,
-          });
-
-          doc.moveDown();
-          doc.font("Helvetica-Bold").fontSize(13).text(para);
           doc.moveDown(0.5);
-          doc.font("Helvetica").fontSize(12);
-        } else if (lower.includes("daftar pustaka")) {
-          doc.addPage();
-
-          toc.push({
-            title: "DAFTAR PUSTAKA",
-            page: doc.bufferedPageRange().count,
-            level: 0,
-          });
-
-          doc
-            .font("Helvetica-Bold")
-            .fontSize(16)
-            .text("DAFTAR PUSTAKA", { align: "center" });
-
-          doc.moveDown(2);
-          doc.font("Helvetica").fontSize(12);
         } else {
           doc.text(para, {
             align: "justify",
@@ -207,66 +216,88 @@ async function generatePDF({
             paragraphGap: 10,
           });
         }
-      });
-
-      /* ================= WRITE TOC RAPI ================= */
-      doc.switchToPage(tocPageIndex);
-      doc.moveDown(2);
-      doc.font("Helvetica").fontSize(12);
-
-      const pageWidth =
-        doc.page.width - doc.page.margins.left - doc.page.margins.right;
-
-      toc.forEach((item) => {
-        const indent = item.level === 1 ? 20 : 0;
-        const pageNumber = item.page.toString();
-
-        const titleWidth = doc.widthOfString(item.title);
-        const pageWidthText = doc.widthOfString(pageNumber);
-
-        const dotsWidth = pageWidth - indent - titleWidth - pageWidthText - 10;
-
-        const dot = ".";
-        const dotWidth = doc.widthOfString(dot);
-        const dotCount = Math.floor(dotsWidth / dotWidth);
-
-        const dots = dot.repeat(dotCount > 0 ? dotCount : 5);
-
-        doc.text(item.title, doc.page.margins.left + indent, doc.y, {
-          continued: true,
-        });
-
-        doc.text(dots, { continued: true });
-
-        doc.text(pageNumber, {
-          align: "right",
-        });
-
-        doc.moveDown(0.5);
-      });
-
-      /* ================= FOOTER ================= */
-      doc.flushPages();
-      const range = doc.bufferedPageRange();
-
-      for (let i = range.start; i < range.start + range.count; i++) {
-        doc.switchToPage(i);
-        doc
-          .fontSize(9)
-          .fillColor("gray")
-          .text(`Halaman ${i - range.start + 1}`, 0, doc.page.height - 40, {
-            align: "center",
-          });
       }
+    });
 
-      doc.end();
+    /* ================= WRITE TOC ================= */
 
+    doc.switchToPage(tocPageIndex);
+    doc.y = tocStartY;
+    doc.font("Helvetica").fontSize(12);
+
+    toc.forEach((item) => {
+      const indent = item.level === 1 ? 20 : 0;
+      const pageNumber = item.page.toString();
+
+      const maxWidth =
+        doc.page.width -
+        doc.page.margins.left -
+        doc.page.margins.right -
+        indent;
+
+      // Tulis judul dulu tanpa titik
+      const titleText = item.title;
+
+      // Hitung sisa ruang
+      const titleWidth = doc.widthOfString(titleText);
+      const pageWidth = doc.widthOfString(pageNumber);
+      const dotWidth = doc.widthOfString(".");
+
+      let availableWidth = maxWidth - titleWidth - pageWidth - 5;
+
+      if (availableWidth < 0) availableWidth = 0;
+
+      const dotCount = Math.floor(availableWidth / dotWidth);
+      const dots = ".".repeat(dotCount > 0 ? dotCount : 0);
+
+      doc.text(titleText, doc.page.margins.left + indent, doc.y, {
+        continued: true,
+      });
+
+      doc.text(dots, { continued: true });
+
+      doc.text(pageNumber, { align: "right" });
+
+      doc.moveDown(0.5);
+    });
+
+    /* ================= FOOTER ================= */
+
+    // Ambil total halaman
+    let range = doc.bufferedPageRange();
+    let totalPages = range.count;
+
+    // Cek apakah halaman terakhir kosong
+    doc.switchToPage(totalPages - 1);
+
+    // Kalau posisi Y masih di atas (artinya kosong / hampir kosong)
+    if (doc.y < 100) {
+      totalPages -= 1;
+    }
+
+    // Tambahkan nomor halaman
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(i);
+
+      if (i === 0) continue; // skip cover
+
+      doc
+        .fontSize(9)
+        .fillColor("gray")
+        .text(`Halaman ${i}`, 0, doc.page.height - 40, {
+          align: "center",
+        });
+    }
+
+    doc.end();
+
+    return new Promise((resolve, reject) => {
       stream.on("finish", () => resolve(filePath));
       stream.on("error", reject);
-    } catch (err) {
-      reject(err);
-    }
-  });
+    });
+  } catch (err) {
+    throw err;
+  }
 }
 
 module.exports = { generatePDF };

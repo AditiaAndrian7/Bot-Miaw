@@ -42,12 +42,23 @@ async function sendSmartReply(message, text) {
         allowedMentions: { repliedUser: false },
       });
 
-      // Hapus file setelah dikirim (biar temp bersih)
-      setTimeout(() => {
+      try {
+        await message.reply({
+          content: "Jawaban terlalu panjang, gue kirim dalam bentuk PDF 📄",
+          files: [filePath],
+          allowedMentions: { repliedUser: false },
+        });
+
+        // Tunggu sedikit biar Discord benar2 selesai baca file
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);
+          console.log("PDF deleted:", filePath);
         }
-      }, 5000);
+      } catch (err) {
+        console.error("Error sending PDF:", err);
+      }
 
       return;
     }

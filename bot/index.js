@@ -705,12 +705,19 @@ Aturan:
       const aiText = await generateResponse({
         userMessage: `Buat makalah lengkap tentang "${topic}" dengan struktur:
 
+Judul (huruf kapital semua)
+
+ABSTRAK
+
 BAB I PENDAHULUAN
 1.1 Latar Belakang
 1.2 Rumusan Masalah
 1.3 Tujuan
 
 BAB II PEMBAHASAN
+2.1 ...
+2.2 ...
+2.3 ...
 
 BAB III PENUTUP
 3.1 Kesimpulan

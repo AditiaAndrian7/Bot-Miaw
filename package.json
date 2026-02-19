@@ -16,6 +16,7 @@
     "@distube/ytdl-core": "^4.16.12",
     "@google/generative-ai": "^0.24.1",
     "@snazzah/davey": "^0.1.9",
+    "axios": "^1.13.5",
     "canvas": "^3.2.1",
     "discord.js": "^14.25.1",
     "dotenv": "^17.3.1",
