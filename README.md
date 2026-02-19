@@ -1,6 +1,6 @@
 # Bot Miaw
 
-Bot WhatsApp dengan fitur AI, PDF, Image, dan Memory services.
+Bot Discord dengan fitur AI, PDF, Image, dan Memory services.
 
 ## 📋 Prasyarat
 
@@ -15,7 +15,7 @@ Anda dapat melakukan clone repository dengan dua cara:
 
 #### Opsi A - Menggunakan Git Clone
 ```bash
-https://github.com/AditiaAndrian7/Bot-Miaw.git
+git clone https://github.com/AditiaAndrian7/Bot-Miaw.git
 cd Bot-Miaw
 ```
 
@@ -32,7 +32,7 @@ Project ini membutuhkan file environment untuk konfigurasi. Ikuti langkah beriku
    
    **Di Windows (Command Prompt):**
    ```bash
-   touch .env
+   copy .env.example .env
    ```
    
    **Di Linux/Mac:**
@@ -53,8 +53,6 @@ GEMINI_KEY_2=AIQWERTY12345678
 npm install
 ```
 
-> **Catatan:** Dependencies sudah termasuk dalam repository, jadi tidak perlu menginstall satu per satu.
-
 ### 4. Jalankan Project
 
 ```bash
@@ -69,31 +67,36 @@ npm run dev
 ## 📁 Struktur Folder
 
 ```
-root/
+BOT DISCORD CONTROL/
 │
-├── bot/
-│   ├── index.js              # File utama bot
-│   │
-│   ├── services/              # Layanan-layanan
-│   │   ├── aiService.js       # Service untuk AI
-│   │   ├── pdfService.js      # Service untuk PDF
-│   │   ├── imageService.js    # Service untuk gambar
-│   │   └── memoryService.js   # Service untuk memory
-│   │
-│   ├── utils/                 # Utilitas
-│   │   └── replyHandler.js    # Handler untuk reply
-│   │
-│   ├── config.js              # Konfigurasi
-│   │
-│   └── temp/                   # Folder temporary
+├── bin/                           # File eksekusi tambahan
+│   └── yt-dlp/
+│       └── yt-dlp.exe            # Untuk unduh video/audio
 │
-├── node_modules/               # Dependencies
-├── package.json
+├── bot/                           # Folder utama bot
+│   ├── fonts/                     # File font untuk generate gambar
+│   ├── services/                   # Layanan-layanan
+│   │   ├── aiService.js           # Service untuk AI
+│   │   ├── pdfService.js          # Service untuk PDF
+│   │   ├── imageService.js        # Service untuk gambar
+│   │   └── memoryService.js       # Service untuk memory
+│   │
+│   ├── utils/                      # Utilitas
+│   │   └── replyHandler.js        # Handler untuk reply
+│   │
+│   ├── temp/                        # Folder temporary (cache, unduhan)
+│   ├── config.js                   # File konfigurasi bot
+│   ├── index.js                     # File utama bot
+│   └── server-channels.json         # Data channel server Discord
+│
+├── node_modules/                    # Dependencies
+├── .env                              # File environment (buat sendiri)
+├── .env.example                      # Contoh file environment
+├── .gitignore                        # File ignore untuk Git
 ├── package-lock.json
-└── .env                        # File environment (buat sendiri)
-└── .env.example                # Contoh file environment
+├── package.json
+└── README.md
 ```
-
 
 ## 🛠️ Troubleshooting
 
@@ -106,11 +109,15 @@ npm install
 ### Error: "Environment variables not found"
 Pastikan file `.env` sudah dibuat dan berisi konfigurasi yang benar
 
+### Error: yt-dlp tidak berfungsi
+Pastikan file `yt-dlp.exe` ada di folder `bin/yt-dlp/`. Jika perlu, download versi terbaru dari [situs resmi yt-dlp](https://github.com/yt-dlp/yt-dlp).
+
 ## 📝 Catatan Penting
 
-- Folder `temp/` akan digunakan untuk menyimpan file sementara
+- Folder `bot/temp/` akan digunakan untuk menyimpan file sementara (cache, unduhan)
+- File `server-channels.json` menyimpan data channel Discord untuk keperluan logging/manajemen
 - Pastikan koneksi internet stabil untuk menggunakan fitur-fitur yang membutuhkan API eksternal
-
+- Fitur download menggunakan yt-dlp membutuhkan akses internet dan file eksekusi yang sesuai dengan sistem operasi Anda
 
 ## 📞 Kontak
 
@@ -120,4 +127,6 @@ Jika ada pertanyaan atau kendala, silakan hubungi:
 
 ---
 **Selamat mencoba!** 🎉
+
+---
 
